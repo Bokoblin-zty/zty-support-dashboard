@@ -148,8 +148,8 @@ function setActive(v){
 
   const pkSubTitle=document.getElementById('pkSubTitle');
   if(pkSubTitle && mainView==='pk'){
-    const labelMap={personal:'总榜',participant:'总选PK',event:'单场PK',birth:'生公专项'};
-    pkSubTitle.textContent='PK数据分类 · ' + (labelMap[v] || '总榜');
+    const labelMap={personal:'综合总榜',participant:'总选PK',event:'单场PK',birth:'生公专项'};
+    pkSubTitle.textContent='PK数据分类 · ' + (labelMap[v] || '综合总榜');
   }
 
   const eventBox=document.getElementById('eventFilterBox');
@@ -206,13 +206,18 @@ function renderTable(){
       <tr class="overviewHeroRow">
         <td colspan="3">
           <div class="overviewPanel">
-            <div class="overviewTitle">应援会数据总览</div>
-            <div class="overviewDesc">PK数据、生公专项、奖励与抽奖均独立统计；本页用于快速查看整体情况。</div>
+            <div class="overviewTitle">周童玥应援会数据总览</div>
+            <div class="overviewDesc">PK数据、生公专项、奖励查询、抽奖结果与公告通知统一汇总；各模块独立统计，方便快速查看。</div>
             <div class="overviewGrid">
               <div class="overviewMini"><span>综合贡献金额</span><b>${fmt(totalContribution)}</b></div>
               <div class="overviewMini"><span>总选PK金额</span><b>${fmt(pkTotal)}</b></div>
               <div class="overviewMini"><span>生公专项金额</span><b>${fmt(birthTotal)}</b></div>
               <div class="overviewMini"><span>总参与人数</span><b>${allUserCount}</b></div>
+            </div>
+            <div class="overviewHighlights">
+              <div class="overviewHighlight"><strong>PK数据</strong><div class="small">综合总榜、总选PK、单场PK与生公专项分开查看。</div></div>
+              <div class="overviewHighlight"><strong>奖励查询</strong><div class="small">按 ID 查询金额门槛奖励与特殊排名奖励兑现状态。</div></div>
+              <div class="overviewHighlight"><strong>公告通知</strong><div class="small">红点提示保留，重要信息统一从入口查看。</div></div>
             </div>
           </div>
         </td>
@@ -255,7 +260,13 @@ function renderTable(){
     title.textContent='抽奖结果';
     thead.innerHTML='<tr><th>类型</th><th>说明</th><th>状态</th></tr>';
     rows=[];
-    tbody.innerHTML='<tr><td><span class="pill">抽奖</span></td><td><b>抽奖功能将在下一版接入。</b><div class="small">后续可显示月度PK抽奖和6.18总贡献抽奖结果。</div></td><td>待配置</td></tr>';
+    tbody.innerHTML='<tr><td><span class="pill">抽奖</span></td><td><div class="emptyState"><b>抽奖结果待配置</b><div class="small">后续可显示月度 PK 抽奖和总贡献抽奖结果；当前入口保留。</div></div></td><td>待配置</td></tr>';
+    return;
+  }else if(state.view==='announcements'){
+    title.textContent='公告通知';
+    thead.innerHTML='<tr><th>类型</th><th>说明</th><th>状态</th></tr>';
+    rows=[];
+    tbody.innerHTML='<tr><td><span class="pill warn">公告</span></td><td><div class="emptyState"><b>暂无新增公告</b><div class="small">公告入口与红点提示保留，后续有通知时可在此查看。</div></div></td><td>待更新</td></tr>';
     return;
   }else{
     title.textContent='说明';
@@ -265,7 +276,11 @@ function renderTable(){
     return;
   }
   rows=rows.filter(r=>!kw || r.search.toLowerCase().includes(kw));
-  tbody.innerHTML=rows.map(r=>`<tr><td><span class="pill">#${r.rank}</span></td><td><b>${escapeHtml(r.name)}</b>${state.view==='personal'?`<div class="small">总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.b)}</div>`:''}</td><td>${fmt(r.value)}</td></tr>`).join('') || '<tr><td colspan="3" class="small">无匹配数据</td></tr>';
+  tbody.innerHTML=rows.map(r=>{
+    const rankClass = r.rank===1 ? 'top1' : (r.rank===2 ? 'top2' : (r.rank===3 ? 'top3' : 'normal'));
+    const rowClass = r.rank<=3 ? ` class="rank-${r.rank}"` : '';
+    return `<tr${rowClass}><td><span class="pill rankPill ${rankClass}">#${r.rank}</span></td><td><b class="${r.rank<=3?'topName':''}">${escapeHtml(r.name)}</b>${state.view==='personal'?`<div class="small">总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.b)}</div>`:''}</td><td>${fmt(r.value)}</td></tr>`;
+  }).join('') || '<tr><td colspan="3" class="small">无匹配数据</td></tr>';
 }
 
 
