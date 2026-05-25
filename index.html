@@ -12,26 +12,25 @@
   <div class="wrap heroInner">
     <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
     <h1 id="title">周童玥应援会数据站</h1>
-    <div class="sub">汇总应援会活动数据，PK、生公、奖励、抽奖与公告独立统计，统一查询。</div>
+    <div class="sub">所有数据仅供参考，如发现遗漏或错误数据请联系群主修改。</div>
   </div>
 </header>
 
 <div class="wrap">
-  <div class="notice stationNotice">数据由 Supabase 云端同步，管理员更新后刷新即可查看最新统计、奖励兑现与公告状态。</div>
-
-  <div class="sectionLabel">数据速览</div>
-  <div class="grid cards metricCards">
-    <div class="card"><div class="k">总选有效场次</div><div class="v" id="kEvents">-</div></div>
+  <div class="sectionLabel">集资数据总览</div>
+  <div class="grid cards metricCards fundSummary">
+    <div class="card primaryMetric"><div class="k">集资总额</div><div class="v" id="fundTotal">-</div><div class="small">总选 + 生公</div></div>
+    <div class="card"><div class="k">总参与人数</div><div class="v" id="fundUsers">-</div><div class="small">去重统计</div></div>
     <div class="card"><div class="k">总选累计金额</div><div class="v" id="kTotal">-</div></div>
-    <div class="card"><div class="k">总选参与者</div><div class="v" id="kUsers">-</div></div>
-    <div class="card"><div class="k">总选人均</div><div class="v" id="kAvg">-</div></div>
+    <div class="card"><div class="k">生公总额</div><div class="v" id="bTotal">-</div></div>
   </div>
 
-  <div class="grid cards metricCards secondaryMetrics">
-    <div class="card"><div class="k">生公总额</div><div class="v" id="bTotal">-</div></div>
+  <div class="grid cards metricCards secondaryMetrics detailMetrics">
+    <div class="card"><div class="k">总选有效场次</div><div class="v" id="kEvents">-</div></div>
+    <div class="card"><div class="k">总选参与者</div><div class="v" id="kUsers">-</div></div>
+    <div class="card"><div class="k">总选人均</div><div class="v" id="kAvg">-</div></div>
     <div class="card"><div class="k">生公参与人数</div><div class="v" id="bUsers">-</div></div>
     <div class="card"><div class="k">生公人均</div><div class="v" id="bAvg">-</div></div>
-    <div class="card"><div class="k">生公原始记录</div><div class="v" id="bRecords">-</div></div>
   </div>
 
   <div class="card controls">
@@ -39,33 +38,33 @@
       <div class="navLabel">数据站入口</div>
       <div class="navRow mainNav">
         <button class="btn active" data-main-view="overview">数据总览</button>
-        <button class="btn" data-main-view="pk">PK数据</button>
+        <button class="btn" data-main-view="pk">集资排名</button>
         <button class="btn" data-view="rewards">奖励查询</button>
-        <button class="btn" data-view="lottery">抽奖结果</button>
         <button class="btn noticeBtn" data-view="announcements">公告通知<span id="announcementBadge" class="noticeDot hidden"></span></button>
+        <button class="btn" data-view="lottery">抽奖结果</button>
       </div>
 
       <div class="pkSubNav hidden" id="pkSubNav">
-        <div class="navLabel secondaryLabel" id="pkSubTitle">PK数据分类</div>
+        <div class="navLabel secondaryLabel" id="pkSubTitle">集资排名分类</div>
         <div class="navRow pkNav">
-          <button class="btn" data-view="personal">综合总榜</button>
-          <button class="btn" data-view="participant">总选PK</button>
-          <button class="btn" data-view="event">单场PK</button>
-          <button class="btn" data-view="birth">生公专项</button>
+          <button class="btn" data-view="personal">总数据排名</button>
+          <button class="btn" data-view="participant">总选排名</button>
+          <button class="btn" data-view="event">单场总选</button>
+          <button class="btn" data-view="birth">生公排名</button>
         </div>
       </div>
 
       <div class="eventFilter hidden" id="eventFilterBox">
-        <span class="small">PK场次</span>
+        <span class="small">总选场次</span>
         <select id="eventSelect"></select>
       </div>
     </div>
   </div>
 
   <div class="card lookupCard hidden" id="personalLookupCard">
-    <h3 style="margin-top:0">个人总览查询</h3>
+    <h3 style="margin-top:0">个人集资查询</h3>
     <div class="lookupBox">
-      <input id="personalLookup" list="nameOptions" type="search" placeholder="输入自己的ID，查询总选金额、生公金额和合计" autocomplete="off" />
+      <input id="personalLookup" list="nameOptions" type="search" placeholder="输入名称，查询总选、生公和集资合计" autocomplete="off" />
       <button class="btn" id="clearPersonalLookup" type="button">清空</button>
     </div>
     <div id="personalLookupResult" class="lookupResult small">输入完整或部分ID后，将显示你的个人总览。</div>
@@ -73,14 +72,14 @@
 
   
 <div class="card contentCard" id="mainTableCard">
-    <h3 style="margin-top:0" class="tableTitle" id="tableTitle">总选PK榜</h3>
+    <h3 style="margin-top:0" class="tableTitle" id="tableTitle">集资数据总览</h3>
     <div class="list"><table class="table"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
   </div>
 
   <div class="card lookupCard" id="lookupCard">
-    <h3 style="margin-top:0" id="lookupTitle">个人查询</h3>
+    <h3 style="margin-top:0" id="lookupTitle">奖励兑现查询</h3>
     <div class="lookupBox">
-      <input id="nameLookup" list="nameOptions" type="search" placeholder="输入名称，查询个人总览或奖励" autocomplete="off" />
+      <input id="nameLookup" list="nameOptions" type="search" placeholder="输入名称，查看对应奖励兑现情况" autocomplete="off" />
       <button class="btn" id="clearLookup" type="button">清空</button>
     </div>
     <label class="small" style="display:flex;gap:6px;align-items:center;margin-top:10px">

@@ -396,3 +396,251 @@ details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;just
     width:100%;
   }
 }
+
+/* ===== Fundraising-first layout pass ===== */
+.siteHero{
+  background:linear-gradient(180deg,#fff 0%,#fff5fa 64%,#fffaf0 100%);
+}
+.heroEyebrow{
+  text-transform:none;
+  letter-spacing:0;
+  color:#b16b83;
+}
+.siteHero h1{
+  margin-bottom:8px;
+}
+.stationNotice{
+  margin:12px 0 16px;
+}
+.fundSummary{
+  grid-template-columns:1.3fr 1fr 1fr 1fr;
+}
+.fundSummary .card{
+  min-height:74px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.fundSummary .primaryMetric{
+  min-height:88px;
+  background:linear-gradient(135deg,#fff7fb,#fff1c9);
+  border-color:#efc86a;
+}
+.fundSummary .primaryMetric .v{
+  font-size:31px;
+  color:#b87512;
+}
+.detailMetrics{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+}
+.detailMetrics .card{
+  min-height:76px;
+  box-shadow:none;
+}
+.controls{
+  margin:18px 0 12px;
+}
+.navSection{
+  gap:12px;
+}
+.mainNav{
+  grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+}
+.mainNav .btn{
+  min-height:48px;
+}
+.pkSubNav{
+  margin-top:2px;
+}
+.pkNav .btn{
+  min-height:42px;
+}
+.contentCard{
+  margin-top:12px;
+}
+.overviewPanel{
+  padding:18px;
+  text-align:left;
+}
+.overviewTitle{
+  font-size:22px;
+  text-align:left;
+}
+.overviewDesc{
+  text-align:left;
+}
+.overviewGrid{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+.overviewMini.primary{
+  background:#fff8d8;
+  border-color:#ebca66;
+}
+.overviewMini.primary b{
+  color:#a96b00;
+}
+.overviewRankGrid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  margin-top:14px;
+}
+.overviewRankCard{
+  border:1px solid #f0d4df;
+  background:#fff;
+  border-radius:16px;
+  padding:12px;
+}
+.overviewRankCard h3{
+  margin:0 0 10px;
+  font-size:15px;
+  text-align:left;
+}
+.overviewRankItem{
+  display:grid;
+  grid-template-columns:1fr;
+  align-items:start;
+  gap:5px;
+  padding:9px 0;
+  border-top:1px solid #f5e2ea;
+}
+.overviewRankItem:first-of-type{
+  border-top:0;
+}
+.rankIdentity{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.rankIdentity b{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.rankBreakdown{
+  grid-column:1/-1;
+  padding-left:52px;
+}
+.overviewRankItem b,.overviewRankItem strong{
+  overflow-wrap:anywhere;
+}
+.rankAmount{
+  padding-left:52px;
+  text-align:left;
+}
+.rankAmount strong{
+  display:block;
+  color:#d9488d;
+  font-size:14px;
+}
+.noteRow td{
+  background:#fffaf0;
+  color:#8a5b17;
+  border-bottom:1px solid #f0dca5;
+  text-align:left !important;
+}
+.lookupCard{
+  background:linear-gradient(180deg,#fff,#fffafd);
+}
+.lookupCard h3{
+  color:#3b2934;
+}
+#lookupCard:not(.hidden){
+  border-color:#efc8d9;
+}
+.emptyState{
+  line-height:1.55;
+}
+.announcementCard{
+  border:1px solid #f0c8d9;
+  border-left:4px solid #e85d9f;
+  border-radius:14px;
+  background:#fffafd;
+  padding:14px;
+  line-height:1.55;
+}
+.announcementCard b{
+  display:block;
+  margin-bottom:5px;
+}
+
+@media(max-width:900px){
+  .fundSummary{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .fundSummary .primaryMetric{
+    grid-column:1/-1;
+  }
+  .detailMetrics{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .mainNav{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+  .mainNav .btn:first-child{
+    grid-column:auto;
+  }
+  .mainNav .noticeBtn{
+    grid-column:auto;
+  }
+  .pkNav{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+  .overviewGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .overviewRankGrid{
+    grid-template-columns:1fr;
+  }
+  .overviewRankItem{
+    grid-template-columns:1fr;
+  }
+  .rankBreakdown{
+    padding-left:52px;
+  }
+  .rankAmount{
+    padding-left:52px;
+  }
+  .table tr{
+    display:grid !important;
+    grid-template-columns:auto minmax(0,1fr);
+    gap:8px 10px;
+    padding:12px !important;
+  }
+  .table td:first-child,.table td:last-child{
+    position:static !important;
+    transform:none !important;
+  }
+  .table td:nth-child(2){
+    padding-right:0 !important;
+  }
+  .table td:last-child{
+    grid-column:2;
+    justify-self:start;
+    text-align:left !important;
+  }
+  .overviewHeroRow{
+    display:block !important;
+  }
+  .overviewHeroRow td{
+    display:block !important;
+  }
+}
+
+@media(max-width:420px){
+  .fundSummary,.detailMetrics{
+    grid-template-columns:1fr;
+  }
+  .fundSummary .primaryMetric .v{
+    font-size:28px;
+  }
+  .mainNav,.pkNav{
+    grid-template-columns:1fr 1fr !important;
+  }
+  .mainNav .btn,.pkNav .btn{
+    min-height:44px;
+  }
+  .overviewGrid{
+    grid-template-columns:1fr;
+  }
+}

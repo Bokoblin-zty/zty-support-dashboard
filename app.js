@@ -2,7 +2,7 @@ const SUPABASE_URL = "https://nmjjgqlcwiqbvpjkyink.supabase.co";
 const SUPABASE_KEY = "sb_publishable_lcaNfMEmLYmIk3Yhlu7Rzw_WfF5qtgX";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], rewardRules:[], specialRankRewards:[] };
+let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[] };
 let state = { view:'overview', event:'', user:null };
 
 const num = v => {
@@ -12,6 +12,7 @@ const num = v => {
   return Number.isFinite(n) ? n : 0;
 };
 const fmt = n => num(n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtVotes = n => num(n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const byAmountDesc = (a,b) => num(b.value ?? b.total ?? b.amount) - num(a.value ?? a.total ?? a.amount);
 const byNameAsc = (a,b) => String(a.name ?? a.user_name ?? '').localeCompare(String(b.name ?? b.user_name ?? ''),'zh-Hans-CN');
 const canon = name => {
@@ -22,16 +23,18 @@ const canon = name => {
 const escapeHtml = s => String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
 async function loadAll(){
-  const [events, records, birth, status, aliases, rewardRules, specialRankRewards] = await Promise.all([
+  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards] = await Promise.all([
     sb.from('pk_events').select('*').order('sort_order',{ascending:true}),
     sb.from('pk_records').select('*'),
     sb.from('birth_fund_records').select('*'),
     sb.from('reward_status').select('*'),
     sb.from('name_aliases').select('*'),
     sb.from('reward_rules').select('*').order('sort_order',{ascending:true}),
+    sb.from('birth_reward_rules').select('*').order('sort_order',{ascending:true}),
+    sb.from('birth_reward_status').select('*'),
     sb.from('special_rank_rewards').select('*').order('created_at',{ascending:false})
   ]);
-  for(const res of [events,records,birth,status,aliases,rewardRules,specialRankRewards]){
+  for(const res of [events,records,birth,status,aliases,rewardRules,birthRewardRules,birthRewardStatus,specialRankRewards]){
     if(res.error){ alert('读取数据失败：'+res.error.message); console.error(res.error); }
   }
   DATA.events = events.data || [];
@@ -45,6 +48,12 @@ async function loadAll(){
     reward_name:r.reward_name,
     sort_order:num(r.sort_order||0)
   }));
+  DATA.birthRewardRules = (birthRewardRules.data || []).map(r=>({
+    threshold:num(r.threshold ?? r.min_amount ?? r.amount),
+    reward_name:r.reward_name ?? r.reward ?? r.name ?? r.title,
+    sort_order:num(r.sort_order||0)
+  })).filter(r=>r.reward_name);
+  DATA.birthRewardStatus = birthRewardStatus.data || [];
   DATA.specialRankRewards = (specialRankRewards.data || []).map(r=>({
     ...r,
     target_rank: num(r.target_rank),
@@ -91,6 +100,10 @@ function getRewardStatus(user,event,reward){
   const u=canon(user);
   return DATA.rewardStatus.find(s=>canon(s.user_name)===u && s.event_name===event && s.reward_name===reward);
 }
+function getBirthRewardStatus(user,reward){
+  const u=canon(user);
+  return DATA.birthRewardStatus.find(s=>canon(s.user_name)===u && (s.reward_name ?? s.reward ?? s.name ?? s.title)===reward);
+}
 function rewardItemsFor(user,event,amount){
   return DATA.rewardRules
     .filter(x=>x.event_name===event)
@@ -101,6 +114,20 @@ function rewardItemsFor(user,event,amount){
       const fulfilled = !!st?.fulfilled || x.reward_name==="印象瓶";
       const date = st?.fulfilled_date || (x.reward_name==="印象瓶" ? "5.18" : "");
       return {min:x.threshold, reward:x.reward_name, fulfilled, date};
+    });
+}
+function birthRewardItemsFor(user,amount){
+  return DATA.birthRewardRules
+    .sort((a,b)=>(a.sort_order||0)-(b.sort_order||0) || b.threshold-a.threshold)
+    .filter(x=>num(amount)>=num(x.threshold))
+    .map(x=>{
+      const st = getBirthRewardStatus(user,x.reward_name);
+      return {
+        min:x.threshold,
+        reward:x.reward_name,
+        fulfilled: !!st?.fulfilled,
+        date: st?.fulfilled_date || st?.date || ''
+      };
     });
 }
 function allEarnedRewards(){
@@ -148,8 +175,8 @@ function setActive(v){
 
   const pkSubTitle=document.getElementById('pkSubTitle');
   if(pkSubTitle && mainView==='pk'){
-    const labelMap={personal:'综合总榜',participant:'总选PK',event:'单场PK',birth:'生公专项'};
-    pkSubTitle.textContent='PK数据分类 · ' + (labelMap[v] || '综合总榜');
+    const labelMap={personal:'总数据排名',participant:'总选排名',event:'单场总选',birth:'生公排名'};
+    pkSubTitle.textContent='集资排名分类 · ' + (labelMap[v] || '总数据排名');
   }
 
   const eventBox=document.getElementById('eventFilterBox');
@@ -165,16 +192,21 @@ function renderAll(){
   const pk = DATA.records;
   const participants = aggregateByUser(pk);
   const total = pk.reduce((s,r)=>s+(+r.amount||0),0);
+  const birthUsers=birthByUser();
+  const btotal=DATA.birthRecords.reduce((s,r)=>s+(+r.amount||0),0);
+  const fundTotal=document.getElementById('fundTotal');
+  const fundUsers=document.getElementById('fundUsers');
+  if(fundTotal) fundTotal.textContent = fmt(total + btotal);
+  if(fundUsers) fundUsers.textContent = allNames().length;
   document.getElementById('kEvents').textContent = pkEvents().length;
   document.getElementById('kTotal').textContent = fmt(total);
   document.getElementById('kUsers').textContent = participants.length;
   document.getElementById('kAvg').textContent = fmt(total / Math.max(participants.length,1));
-  const birthUsers=birthByUser();
-  const btotal=DATA.birthRecords.reduce((s,r)=>s+(+r.amount||0),0);
   document.getElementById('bTotal').textContent = fmt(btotal);
   document.getElementById('bUsers').textContent = birthUsers.length;
   document.getElementById('bAvg').textContent = fmt(btotal/Math.max(birthUsers.length,1));
-  document.getElementById('bRecords').textContent = DATA.birthRecords.length;
+  const bRecords=document.getElementById('bRecords');
+  if(bRecords) bRecords.textContent = DATA.birthRecords.length;
   const personalCard=document.getElementById('personalLookupCard');
   const rewardCard=document.getElementById('lookupCard');
   const mainTableCard=document.getElementById('mainTableCard');
@@ -192,58 +224,67 @@ function renderTable(){
   const thead=document.getElementById('thead'), tbody=document.getElementById('tbody'), title=document.getElementById('tableTitle');
   let rows=[];
   if(state.view==='overview'){
-    title.textContent='数据总览';
+    title.textContent='集资数据总览';
     thead.innerHTML='';
     const pkList=aggregateByUser(DATA.records);
     const birthList=birthByUser();
     const pkTotal=pkList.reduce((s,p)=>s+num(p.total),0);
     const birthTotal=birthList.reduce((s,p)=>s+num(p.total),0);
     const allUserCount=allNames().length;
-    const topPk=pkList[0];
-    const topBirth=birthList[0];
     const totalContribution=pkTotal+birthTotal;
+    const combinedRows=allNames().map(name=>{
+      const pkAmount=pkList.find(p=>p.name===name)?.total || 0;
+      const birthAmount=birthList.find(p=>p.name===name)?.total || 0;
+    return {name,total:pkAmount+birthAmount,pk:pkAmount,birth:birthAmount};
+    }).sort((a,b)=>num(b.total)-num(a.total) || byNameAsc(a,b));
+    const topList = (rows, type) => rows.slice(0,3).map((r,i)=>`
+      <div class="overviewRankItem rank-${i+1}">
+        <div class="rankIdentity">
+          <span class="pill rankPill ${i===0?'top1':(i===1?'top2':'top3')}">#${i+1}</span>
+          <b>${escapeHtml(r.name)}</b>
+        </div>
+        <div class="small rankBreakdown">${type==='total'?`总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.birth)}`:(type==='pk'?'总选金额':'生公金额')}</div>
+        <div class="rankAmount"><strong>${fmt(r.total)}</strong></div>
+      </div>`).join('') || '<div class="small">暂无数据</div>';
     tbody.innerHTML=`
       <tr class="overviewHeroRow">
         <td colspan="3">
           <div class="overviewPanel">
-            <div class="overviewTitle">周童玥应援会数据总览</div>
-            <div class="overviewDesc">PK数据、生公专项、奖励查询、抽奖结果与公告通知统一汇总；各模块独立统计，方便快速查看。</div>
+            <div class="overviewTitle">集资数据总览</div>
+            <div class="overviewDesc">数据分为总选集资与生公集资两部分；首页展示总数据、总选数据和生公数据的核心统计与排名摘要。</div>
             <div class="overviewGrid">
-              <div class="overviewMini"><span>综合贡献金额</span><b>${fmt(totalContribution)}</b></div>
-              <div class="overviewMini"><span>总选PK金额</span><b>${fmt(pkTotal)}</b></div>
-              <div class="overviewMini"><span>生公专项金额</span><b>${fmt(birthTotal)}</b></div>
+              <div class="overviewMini primary"><span>集资总额</span><b>${fmt(totalContribution)}</b></div>
+              <div class="overviewMini"><span>总选集资</span><b>${fmt(pkTotal)}</b></div>
+              <div class="overviewMini"><span>生公集资</span><b>${fmt(birthTotal)}</b></div>
               <div class="overviewMini"><span>总参与人数</span><b>${allUserCount}</b></div>
             </div>
-            <div class="overviewHighlights">
-              <div class="overviewHighlight"><strong>PK数据</strong><div class="small">综合总榜、总选PK、单场PK与生公专项分开查看。</div></div>
-              <div class="overviewHighlight"><strong>奖励查询</strong><div class="small">按 ID 查询金额门槛奖励与特殊排名奖励兑现状态。</div></div>
-              <div class="overviewHighlight"><strong>公告通知</strong><div class="small">红点提示保留，重要信息统一从入口查看。</div></div>
+            <div class="overviewRankGrid">
+              <div class="overviewRankCard"><h3>总数据 TOP3</h3>${topList(combinedRows,'total')}</div>
+              <div class="overviewRankCard"><h3>总选 TOP3</h3>${topList(pkList.map(p=>({name:p.name,total:p.total})),'pk')}</div>
+              <div class="overviewRankCard"><h3>生公 TOP3</h3>${topList(birthList.map(p=>({name:p.name,total:p.total})),'birth')}</div>
             </div>
           </div>
         </td>
       </tr>
-      <tr><td><span class="pill good">TOP</span></td><td><b>总选PK当前最高</b><div class="small">${topPk?escapeHtml(topPk.name):'-'}</div></td><td>${topPk?fmt(topPk.total):'-'}</td></tr>
-      <tr><td><span class="pill good">TOP</span></td><td><b>生公专项当前最高</b><div class="small">${topBirth?escapeHtml(topBirth.name):'-'}</div></td><td>${topBirth?fmt(topBirth.total):'-'}</td></tr>
-      <tr><td><span class="pill">场次</span></td><td><b>总选PK有效场次</b><div class="small">可在 PK数据 → 单场PK 中查看</div></td><td>${pkEvents().length}</td></tr>
     `;
     return;
   }else if(state.view==='participant'){
-    title.textContent='总选PK榜';
-    thead.innerHTML='<tr><th>排名</th><th>名称</th><th>总选金额</th></tr>';
-    rows=aggregateByUser(DATA.records).map((p,i)=>({rank:i+1,name:p.name,value:p.total,search:p.name}));
+    title.textContent='总选集资排名';
+    thead.innerHTML='<tr class="noteRow"><td colspan="3" class="small">票数按 33.5 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>总选金额</th></tr>';
+    rows=aggregateByUser(DATA.records).map((p,i)=>({rank:i+1,name:p.name,value:p.total,votes:p.total/33.5,showVotes:true,search:p.name}));
   }else if(state.view==='event'){
     const event=state.event || pkEvents()[0]?.event_name;
-    title.textContent=`${event} · 总选单场排名`;
-    thead.innerHTML='<tr><th>排名</th><th>名称</th><th>金额</th></tr>';
+    title.textContent=`${event} · 单场总选排名`;
+    thead.innerHTML='<tr class="noteRow"><td colspan="3" class="small">票数按 33.5 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>金额</th></tr>';
     rows=DATA.records.filter(r=>r.event_name===event)
       .sort((a,b)=>byAmountDesc(a,b) || String(a.user_name).localeCompare(String(b.user_name),'zh-Hans-CN'))
-      .map((r,i)=>({rank:i+1,name:r.user_name,value:num(r.amount),search:`${r.user_name} ${r.event_name}`}));
+      .map((r,i)=>({rank:i+1,name:r.user_name,value:num(r.amount),votes:num(r.amount)/33.5,showVotes:true,search:`${r.user_name} ${r.event_name}`}));
   }else if(state.view==='birth'){
-    title.textContent='生公专项榜';
+    title.textContent='生公集资排名';
     thead.innerHTML='<tr><th>排名</th><th>名称</th><th>生公金额</th></tr>';
     rows=birthByUser().map((p,i)=>({rank:i+1,name:p.name,value:p.total,search:p.name}));
   }else if(state.view==='personal'){
-    title.textContent='综合贡献总榜';
+    title.textContent='总数据排名';
     thead.innerHTML='<tr><th>排名</th><th>名称</th><th>贡献合计</th></tr>';
     const pkMap=new Map(aggregateByUser(DATA.records).map(p=>[p.name,p.total]));
     const bMap=new Map(birthByUser().map(p=>[p.name,p.total]));
@@ -251,7 +292,7 @@ function renderTable(){
       .sort((a,b)=>byAmountDesc(a,b) || byNameAsc(a,b))
       .map((r,i)=>({...r,rank:i+1}));
   }else if(state.view==='rewards'){
-    title.textContent='奖励查询';
+    title.textContent='奖励兑现查询';
     thead.innerHTML='';
     rows=[];
     tbody.innerHTML='';
@@ -266,7 +307,7 @@ function renderTable(){
     title.textContent='公告通知';
     thead.innerHTML='<tr><th>类型</th><th>说明</th><th>状态</th></tr>';
     rows=[];
-    tbody.innerHTML='<tr><td><span class="pill warn">公告</span></td><td><div class="emptyState"><b>暂无新增公告</b><div class="small">公告入口与红点提示保留，后续有通知时可在此查看。</div></div></td><td>待更新</td></tr>';
+    tbody.innerHTML='<tr><td><span class="pill warn">公告</span></td><td><div class="announcementCard"><b>暂无新增公告</b><div class="small">公告入口与红点提示保留。后台发布公告后，可在此区域以卡片形式查看通知内容。</div></div></td><td>待更新</td></tr>';
     return;
   }else{
     title.textContent='说明';
@@ -279,7 +320,7 @@ function renderTable(){
   tbody.innerHTML=rows.map(r=>{
     const rankClass = r.rank===1 ? 'top1' : (r.rank===2 ? 'top2' : (r.rank===3 ? 'top3' : 'normal'));
     const rowClass = r.rank<=3 ? ` class="rank-${r.rank}"` : '';
-    return `<tr${rowClass}><td><span class="pill rankPill ${rankClass}">#${r.rank}</span></td><td><b class="${r.rank<=3?'topName':''}">${escapeHtml(r.name)}</b>${state.view==='personal'?`<div class="small">总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.b)}</div>`:''}</td><td>${fmt(r.value)}</td></tr>`;
+    return `<tr${rowClass}><td><span class="pill rankPill ${rankClass}">#${r.rank}</span></td><td><b class="${r.rank<=3?'topName':''}">${escapeHtml(r.name)}</b>${state.view==='personal'?`<div class="small">总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.b)}</div>`:''}</td><td>${fmt(r.value)}${r.showVotes?`<div class="small">折合 ${fmtVotes(r.votes)} 票</div>`:''}</td></tr>`;
   }).join('') || '<tr><td colspan="3" class="small">无匹配数据</td></tr>';
 }
 
@@ -325,14 +366,14 @@ function renderPersonalSearch(){
     <div class="lookupSummary">
       <div class="lookupMini"><span class="small">名称</span><b>${escapeHtml(name)}</b></div>
       <div class="lookupMini"><span class="small">贡献合计</span><b>${fmt(grandTotal)}</b></div>
-      <div class="lookupMini"><span class="small">参与PK场次</span><b>${joinedPk}</b></div>
+      <div class="lookupMini"><span class="small">参与总选场次</span><b>${joinedPk}</b></div>
     </div>
     <div class="lookupSummary">
       <div class="lookupMini"><span class="small">总选金额</span><b>${fmt(pkTotal)}</b></div>
       <div class="lookupMini"><span class="small">生公金额</span><b>${fmt(bTotal)}</b></div>
       <div class="lookupMini"><span class="small">最高单场</span><b>${escapeHtml(best.name)} ${fmt(best.amount)}</b></div>
     </div>
-    <div class="small" style="margin:2px 0 8px">贡献合计仅供个人查询参考；总选排名只计算总选PK金额，生公不计入总选排名。</div>
+    <div class="small" style="margin:2px 0 8px">集资合计仅供个人查询参考；总选排名只计算总选金额，生公不计入总选排名。</div>
     <div class="eventAmountList">
       ${pkRows.map(r=>`<div class="eventAmountItem"><div><b>${escapeHtml(r.name)}</b><div class="small">${escapeHtml(r.date||'')}</div></div><div class="amt">${fmt(r.amount)}</div></div>`).join('')}
       <div class="eventAmountItem"><div><b>生公专项</b><div class="small">独立统计，不计入总选</div></div><div class="amt">${fmt(bTotal)}</div></div>
@@ -350,10 +391,10 @@ function renderPersonalSearch(){
 function renderLookup(){
   const kw=(document.getElementById('nameLookup').value||'').trim().toLowerCase();
   const out=document.getElementById('lookupResult');
-  document.getElementById('lookupTitle').textContent = state.view==='rewards' ? '奖励查询' : '个人金额查询';
+  document.getElementById('lookupTitle').textContent = state.view==='rewards' ? '奖励兑现查询' : '个人集资查询';
   if(!kw){
     out.className='lookupResult small';
-    out.innerHTML=state.view==='rewards' ? '输入ID查看奖励。' : '输入完整或部分名称后，将显示该参与者信息。';
+    out.innerHTML=state.view==='rewards' ? '输入名称查看奖励兑现情况。' : '输入完整或部分名称后，将显示该参与者信息。';
     return;
   }
   const matches=allNames().filter(n=>n.toLowerCase().includes(kw));
@@ -379,7 +420,7 @@ function renderPersonalLookup(name,candidates,out){
       <div class="lookupMini"><span class="small">总选金额</span><b>${fmt(pkTotal)}</b></div>
       <div class="lookupMini"><span class="small">生公金额</span><b>${fmt(bTotal)}</b></div>
     </div>
-    <div class="small" style="margin:2px 0 8px">个人贡献合计：${fmt(pkTotal+bTotal)}。该合计仅供个人贡献参考，不参与总选排名。</div>
+    <div class="small" style="margin:2px 0 8px">个人集资合计：${fmt(pkTotal+bTotal)}。该合计仅供个人查询参考，不参与总选排名。</div>
     <div class="eventAmountList">
       ${pkRows.map(r=>`<div class="eventAmountItem"><div><b>${escapeHtml(r.name)}</b><div class="small">${escapeHtml(r.date||'')}</div></div><div class="amt">${fmt(r.amount)}</div></div>`).join('')}
       <div class="eventAmountItem"><div><b>生公专项</b><div class="small">独立统计，不计入总选</div></div><div class="amt">${fmt(bTotal)}</div></div>
@@ -394,6 +435,9 @@ function renderRewardLookup(name,candidates,out){
     if(only) rewards=rewards.filter(x=>!x.fulfilled);
     return {event:e.event_name,date:e.event_date,amount,rewards};
   }).filter(r=>r.amount>0 && r.rewards.length);
+  const birthAmount=DATA.birthRecords.filter(r=>r.user_name===name).reduce((s,r)=>s+r.amount,0);
+  let birthRewards=birthRewardItemsFor(name,birthAmount);
+  if(only) birthRewards=birthRewards.filter(x=>!x.fulfilled);
   out.className='lookupResult';
   out.innerHTML=candidates+`
     <div class="lookupSummary">
@@ -407,8 +451,14 @@ function renderRewardLookup(name,candidates,out){
         ${r.rewards.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}</div></div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
       </div>
     </details>`).join('') || '<div class="small">暂无符合条件的金额门槛奖励。</div>'}
+    <details class="rewardDetails" open>
+      <summary><span>生公奖励 <span class="small">生公集资合计</span></span><span>${fmt(birthAmount)}</span></summary>
+      <div class="rewardList">
+        ${birthRewards.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}</div></div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('') || '<div class="small">暂无符合条件的生公奖励。</div>'}
+      </div>
+    </details>
     ${renderSpecialRankRewardsForUser(name)}
-    <div class="hint">128 档默认拼豆挂件；金额门槛奖励仅根据总选单场 PK 金额判断，生公不参与。特殊排名奖励由提供者独立提供，按后台记录显示。</div>`;
+    <div class="hint">总选奖励按单场总选金额判断；生公奖励按生公集资合计判断。特殊排名奖励由提供者独立提供，按后台记录显示。</div>`;
 }
 
 
