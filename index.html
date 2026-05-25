@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>2026 应援数据汇总</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header>
+  <div class="wrap" style="padding:0">
+    <h1 id="title">应援会数据中心</h1>
+    <div class="sub">记录应援会各项活动数据，PK、生公、奖励与抽奖结果独立统计。</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="notice">总选 PK、生日公演集资、奖励规则与奖励兑现状态均从 Supabase 云端读取。管理员更新后，所有人刷新页面即可看到最新数据。</div>
+
+  <div class="grid cards">
+    <div class="card"><div class="k">总选有效场次</div><div class="v" id="kEvents">-</div></div>
+    <div class="card"><div class="k">总选累计金额</div><div class="v" id="kTotal">-</div></div>
+    <div class="card"><div class="k">总选参与者</div><div class="v" id="kUsers">-</div></div>
+    <div class="card"><div class="k">总选人均</div><div class="v" id="kAvg">-</div></div>
+  </div>
+
+  <div class="grid cards" style="margin-top:14px">
+    <div class="card"><div class="k">生公总额</div><div class="v" id="bTotal">-</div></div>
+    <div class="card"><div class="k">生公参与人数</div><div class="v" id="bUsers">-</div></div>
+    <div class="card"><div class="k">生公人均</div><div class="v" id="bAvg">-</div></div>
+    <div class="card"><div class="k">生公原始记录</div><div class="v" id="bRecords">-</div></div>
+  </div>
+
+  <div class="card controls">
+    <div class="navSection">
+      <div class="navLabel">功能入口</div>
+      <div class="navRow mainNav">
+        <button class="btn active" data-main-view="overview">数据总览</button>
+        <button class="btn" data-main-view="pk">PK数据</button>
+        <button class="btn" data-view="rewards">奖励查询</button>
+        <button class="btn" data-view="lottery">抽奖结果</button>
+        <button class="btn noticeBtn" data-view="announcements">公告通知<span id="announcementBadge" class="noticeDot hidden"></span></button>
+      </div>
+
+      <div class="pkSubNav hidden" id="pkSubNav">
+        <div class="navLabel secondaryLabel" id="pkSubTitle">PK数据分类</div>
+        <div class="navRow pkNav">
+          <button class="btn" data-view="personal">总榜</button>
+          <button class="btn" data-view="participant">总选PK</button>
+          <button class="btn" data-view="event">单场PK</button>
+          <button class="btn" data-view="birth">生公专项</button>
+        </div>
+      </div>
+
+      <div class="eventFilter hidden" id="eventFilterBox">
+        <span class="small">PK场次</span>
+        <select id="eventSelect"></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card lookupCard hidden" id="personalLookupCard">
+    <h3 style="margin-top:0">个人总览查询</h3>
+    <div class="lookupBox">
+      <input id="personalLookup" list="nameOptions" type="search" placeholder="输入自己的ID，查询总选金额、生公金额和合计" autocomplete="off" />
+      <button class="btn" id="clearPersonalLookup" type="button">清空</button>
+    </div>
+    <div id="personalLookupResult" class="lookupResult small">输入完整或部分ID后，将显示你的个人总览。</div>
+  </div>
+
+  
+<div class="card" style="margin-top:12px" id="mainTableCard">
+    <h3 style="margin-top:0" class="tableTitle" id="tableTitle">总选PK榜</h3>
+    <div class="list"><table class="table"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+  </div>
+
+  <div class="card lookupCard" id="lookupCard">
+    <h3 style="margin-top:0" id="lookupTitle">个人查询</h3>
+    <div class="lookupBox">
+      <input id="nameLookup" list="nameOptions" type="search" placeholder="输入名称，查询个人总览或奖励" autocomplete="off" />
+      <button class="btn" id="clearLookup" type="button">清空</button>
+    </div>
+    <label class="small" style="display:flex;gap:6px;align-items:center;margin-top:10px">
+      <input id="onlyUnfulfilled" type="checkbox" style="min-height:auto"> 奖励查询时仅显示未兑现
+    </label>
+    <datalist id="nameOptions"></datalist>
+    <div id="lookupResult" class="lookupResult small">输入完整或部分名称后，将显示该参与者信息。</div>
+  </div>
+</div>
+
+<div class="modal" id="adminModal">
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+      <div>
+        <h2 style="margin:0">管理员后台</h2>
+        <div class="small">登录后可修改云端数据。</div>
+      </div>
+      <button class="btn" id="closeAdmin">关闭</button>
+    </div>
+
+    <div id="loginBox" style="margin-top:14px">
+      <div class="formGrid two">
+        <input id="adminEmail" type="email" placeholder="管理员邮箱">
+        <input id="adminPassword" type="password" placeholder="密码">
+      </div>
+      <button class="btn good" id="loginBtn">登录</button>
+      <div class="status" id="loginStatus"></div>
+    </div>
+
+    <div id="adminBox" class="hidden">
+      <div class="row" style="justify-content:space-between;margin-top:10px">
+        <div class="status" id="adminUser"></div>
+        <button class="btn bad" id="logoutBtn">退出登录</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-admin-tab="rewardAdmin">奖励兑现</button>
+        <button class="tab" data-admin-tab="eventAdmin">新增 PK 场次</button>
+        <button class="tab" data-admin-tab="pkImportAdmin">导入 PK 数据</button>
+        <button class="tab" data-admin-tab="birthImportAdmin">导入生公数据</button>
+        <button class="tab" data-admin-tab="ruleImportAdmin">导入奖励规则</button>
+        <button class="tab" data-admin-tab="specialRankAdmin">特殊排名奖励</button>
+        <button class="tab" data-admin-tab="unfulfilledAdmin">未兑现总表</button>
+        <button class="tab" data-admin-tab="aliasAdmin">名称别名</button>
+      </div>
+
+      <div class="adminSection active" id="rewardAdmin">
+        <h3>奖励兑现管理</h3>
+        <div class="formGrid">
+          <input id="rewardSearch" type="search" placeholder="搜索用户名 / 场次 / 奖励">
+          <input id="rewardDate" type="text" placeholder="兑现日期，例如 5.18">
+          <button class="btn" id="reloadRewards">刷新列表</button>
+        </div>
+        <div class="small">勾选奖励后会写入 Supabase。若填写日期，将作为兑现日期保存。</div>
+        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>用户 / 场次 / 奖励</th><th>操作</th></tr></thead><tbody id="rewardAdminBody"></tbody></table></div>
+      </div>
+
+      <div class="adminSection" id="eventAdmin">
+        <h3>新增 PK 场次</h3>
+        <div class="formGrid">
+          <input id="newEventName" placeholder="场次名称">
+          <input id="newEventDate" placeholder="日期，例如 6.1-6.2">
+          <input id="newEventOrder" type="number" placeholder="排序，例如 5">
+        </div>
+        <button class="btn good" id="addEventBtn">新增场次</button>
+        <div class="status" id="eventAdminStatus"></div>
+      </div>
+
+      <div class="adminSection" id="pkImportAdmin">
+        <h3>导入 PK 数据</h3>
+        <div class="small">格式：每行一条，支持 CSV：场次,名称,金额。第一行可以是表头。</div>
+        <textarea id="pkCsv" placeholder="event_name,user_name,amount&#10;春日踏青,波克布林,334.8"></textarea>
+        <button class="btn good" id="importPkBtn">导入 PK 数据</button>
+        <div class="status" id="pkImportStatus"></div>
+      </div>
+
+      <div class="adminSection" id="birthImportAdmin">
+        <h3>导入生公数据</h3>
+        <div class="small">格式：每行一条，支持 CSV：名称,金额,批次。第一行可以是表头。</div>
+        <textarea id="birthCsv" placeholder="user_name,amount,batch_name&#10;徐乐迪,50,5.16生公"></textarea>
+        <button class="btn good" id="importBirthBtn">导入生公数据</button>
+        <div class="status" id="birthImportStatus"></div>
+      </div>
+
+      <div class="adminSection" id="ruleImportAdmin">
+        <h3>导入奖励规则</h3>
+        <div class="small">格式：每行一条，支持 CSV：场次,门槛金额,奖励名称,排序。第一行可以是表头。</div>
+        <textarea id="ruleCsv" placeholder="event_name,threshold,reward_name,sort_order&#10;六月冲刺,322,限定冰箱贴,1&#10;六月冲刺,128,拼豆挂件,2"></textarea>
+        <button class="btn good" id="importRuleBtn">导入奖励规则</button>
+        <div class="status" id="ruleImportStatus"></div>
+      </div>
+
+      <div class="adminSection" id="specialRankAdmin">
+        <h3>特殊排名奖励</h3>
+        <div class="small">用于记录由个人/外部提供、按单场排名发放且可能顺延的奖励。普通金额门槛奖励仍由 reward_rules 自动计算。</div>
+        <div class="formGrid">
+          <select id="specialEventName"></select>
+          <input id="specialRewardName" placeholder="奖励名称，例如 第一名特别奖励">
+          <input id="specialProviderName" placeholder="提供者，例如 小A">
+        </div>
+        <div class="formGrid">
+          <input id="specialTargetRank" type="number" placeholder="原定名次，例如 1">
+          <input id="specialWinnerName" list="nameOptions" placeholder="当前获得人">
+          <select id="specialStatus">
+            <option value="pending">待确认</option>
+            <option value="awarded">正常获得</option>
+            <option value="passed_down">顺延获得</option>
+            <option value="waived">已放弃</option>
+            <option value="skipped">已跳过</option>
+          </select>
+        </div>
+        <div class="formGrid">
+          <input id="specialFulfilledDate" placeholder="兑现日期，可空，例如 6.20">
+          <input id="specialNote" placeholder="备注，例如 原第1名已拥有，顺延至第2名">
+          <button class="btn good" id="addSpecialRankBtn">保存特殊奖励</button>
+        </div>
+        <input id="specialEditId" type="hidden" />
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="cancelSpecialEditBtn" type="button" style="display:none">取消编辑</button>
+        </div>
+        <div class="status" id="specialRankStatus"></div>
+        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>特殊奖励</th><th>操作</th></tr></thead><tbody id="specialRankBody"></tbody></table></div>
+      </div>
+
+      <div class="adminSection" id="unfulfilledAdmin">
+        <h3>未兑现奖励名单查询</h3>
+        <div class="small">选择 PK 场次和具体奖励，查看该奖励尚未兑现的名单。</div>
+        <div class="formGrid">
+          <select id="unfulfilledEventSelect"></select>
+          <select id="unfulfilledRewardSelect"></select>
+          <button class="btn" id="refreshUnfulfilledBtn" type="button">刷新名单</button>
+        </div>
+        <div class="row" style="margin:10px 0">
+          <span class="pill" id="unfulfilledCountPill">未兑现 0 人</span>
+          <button class="btn" id="copyUnfulfilledBtn" type="button">复制名单</button>
+          <button class="btn good" id="downloadUnfulfilledBtn" type="button">导出CSV</button>
+        </div>
+        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>排名/类型</th><th>用户 / 奖励</th><th>状态</th></tr></thead><tbody id="unfulfilledBody"></tbody></table></div>
+      </div>
+
+      <div class="adminSection" id="aliasAdmin">
+        <h3>名称别名管理</h3>
+        <div class="formGrid two">
+          <input id="aliasName" placeholder="别名，例如 Riute.">
+          <input id="canonicalName" placeholder="统一名称，例如 Riute">
+        </div>
+        <button class="btn good" id="addAliasBtn">保存别名</button>
+        <div class="status" id="aliasStatus"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
