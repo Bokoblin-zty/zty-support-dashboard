@@ -137,3 +137,16 @@ create table if not exists operation_logs (
   metadata jsonb,
   created_at timestamp with time zone default now()
 );
+
+create table if not exists site_settings (
+  setting_key text primary key,
+  setting_value text not null,
+  updated_at timestamp with time zone default now(),
+  created_at timestamp with time zone default now()
+);
+
+insert into site_settings (setting_key, setting_value)
+values
+  ('access_password_hash', '116070d3ce1fe6fcbf1a3147511bc32442b455a08e571814a490499a09371b5f'),
+  ('access_ttl_days', '7')
+on conflict (setting_key) do nothing;

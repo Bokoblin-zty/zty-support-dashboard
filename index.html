@@ -13,20 +13,30 @@
 <link rel="stylesheet" href="styles/table.css" />
 <link rel="stylesheet" href="styles/mobile.css" />
 </head>
-<body>
+<body class="accessLocked">
+<div class="accessGate" id="accessGate" aria-modal="true" role="dialog">
+  <form class="accessPanel" id="accessForm">
+    <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
+    <h2>访问验证</h2>
+    <div class="sub">请输入统一访问密码后继续查看数据站。</div>
+    <input id="sitePasswordInput" type="password" placeholder="输入访问密码" autocomplete="current-password" />
+    <button class="btn active" type="submit">进入数据站</button>
+    <div class="status" id="accessStatus"></div>
+  </form>
+</div>
 <header class="siteHero">
   <div class="siteVersion">v1.0 测试版</div>
   <div class="wrap heroInner">
     <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
     <h1 id="title">周童玥应援会数据站</h1>
-    <div class="sub">所有数据仅供参考，如发现遗漏或错误数据请联系群主修改。神秘代码：158139179</div>
+    <div class="sub">所有数据仅供参考，如发现遗漏或错误数据请联系群主修改。</div>
   </div>
 </header>
 
 <div class="wrap">
-  <div class="sectionLabel">集资数据总览</div>
+  <div class="sectionLabel">🍊数据总览</div>
   <div class="grid cards metricCards fundSummary">
-    <div class="card primaryMetric"><div class="k">集资总额</div><div class="v" id="fundTotal">-</div><div class="small">总选 + 生公</div></div>
+    <div class="card primaryMetric"><div class="k">🍊总额</div><div class="v" id="fundTotal">-</div><div class="small">总选 + 生公</div></div>
     <div class="card"><div class="k">总参与人数</div><div class="v" id="fundUsers">-</div><div class="small">去重统计</div></div>
     <div class="card"><div class="k">总选累计金额</div><div class="v" id="kTotal">-</div></div>
     <div class="card"><div class="k">生公总额</div><div class="v" id="bTotal">-</div></div>
@@ -45,7 +55,7 @@
       <div class="navLabel">数据站入口</div>
       <div class="navRow mainNav">
         <button class="btn active" data-main-view="overview">数据总览</button>
-        <button class="btn" data-main-view="pk">集资排名</button>
+        <button class="btn" data-main-view="pk">🍊排名</button>
         <button class="btn" data-view="rewards">奖励查询</button>
         <button class="btn noticeBtn" data-view="announcements">公告通知<span id="announcementBadge" class="noticeDot hidden"></span></button>
         <button class="btn" data-view="lottery">抽奖结果</button>
@@ -53,7 +63,7 @@
       </div>
 
       <div class="pkSubNav hidden" id="pkSubNav">
-        <div class="navLabel secondaryLabel" id="pkSubTitle">集资排名分类</div>
+        <div class="navLabel secondaryLabel" id="pkSubTitle">🍊排名分类</div>
         <div class="navRow pkNav">
           <button class="btn" data-view="personal">总数据排名</button>
           <button class="btn" data-view="participant">总选排名</button>
@@ -70,9 +80,9 @@
   </div>
 
   <div class="card lookupCard hidden" id="personalLookupCard">
-    <h3 class="cardTitle">个人集资查询</h3>
+    <h3 class="cardTitle">个人🍊查询</h3>
     <div class="lookupBox">
-      <input id="personalLookup" list="nameOptions" type="search" placeholder="输入名称，查询总选、生公和集资合计" autocomplete="off" />
+      <input id="personalLookup" list="nameOptions" type="search" placeholder="输入名称，查询总选、生公和🍊合计" autocomplete="off" />
       <button class="btn" id="clearPersonalLookup" type="button">清空</button>
     </div>
     <div id="personalLookupResult" class="lookupResult small">输入完整或部分ID后，将显示你的个人总览。</div>
@@ -80,7 +90,7 @@
 
   
 <div class="card contentCard" id="mainTableCard">
-    <h3 class="tableTitle cardTitle" id="tableTitle">集资数据总览</h3>
+    <h3 class="tableTitle cardTitle" id="tableTitle">🍊数据总览</h3>
     <div class="list"><table class="table"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
   </div>
 
@@ -142,6 +152,7 @@
         <button class="tab" data-admin-tab="lotteryAdmin">抽奖管理</button>
         <button class="tab" data-admin-tab="questionAdmin">提问回复</button>
         <span class="adminGroupLabel">系统记录</span>
+        <button class="tab" data-admin-tab="siteSettingsAdmin">系统设置</button>
         <button class="tab" data-admin-tab="operationLogAdmin">操作日志</button>
       </div>
 
@@ -398,6 +409,20 @@
         </div>
         <div class="status" id="operationLogStatus"></div>
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>时间</th><th>操作</th><th>详情</th></tr></thead><tbody id="operationLogBody"></tbody></table></div>
+      </div>
+
+      <div class="adminSection" id="siteSettingsAdmin">
+        <h3>系统设置</h3>
+        <div class="adminLead">这里维护数据站统一访问密码，以及用户输入正确后多久不需要再次输入。</div>
+        <div class="formGrid two">
+          <input id="siteAccessPasswordAdmin" type="password" placeholder="新访问密码，留空则不修改">
+          <input id="siteAccessTtlDaysAdmin" type="number" min="1" max="365" step="1" placeholder="免输入天数">
+        </div>
+        <div class="row adminActionRow">
+          <button class="btn good" id="saveSiteSettingsBtn" type="button">保存访问设置</button>
+          <button class="btn" id="reloadSiteSettingsBtn" type="button">刷新设置</button>
+        </div>
+        <div class="status" id="siteSettingsStatus"></div>
       </div>
 
       <div class="adminSection" id="questionAdmin">

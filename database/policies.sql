@@ -16,6 +16,7 @@ alter table announcements enable row level security;
 alter table lottery_records enable row level security;
 alter table questions enable row level security;
 alter table operation_logs enable row level security;
+alter table site_settings enable row level security;
 
 create policy "public read pk_events"
 on pk_events for select
@@ -160,4 +161,14 @@ using (true);
 create policy "admin write operation_logs"
 on operation_logs for insert
 to authenticated
+with check (true);
+
+create policy "public read site_settings"
+on site_settings for select
+using (true);
+
+create policy "admin write site_settings"
+on site_settings for all
+to authenticated
+using (true)
 with check (true);

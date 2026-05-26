@@ -4,9 +4,14 @@
 const SUPABASE_URL = "https://nmjjgqlcwiqbvpjkyink.supabase.co";
 const SUPABASE_KEY = "sb_publishable_lcaNfMEmLYmIk3Yhlu7Rzw_WfF5qtgX";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SITE_ACCESS_STORAGE_KEY = "zty_support_access_granted";
+const DEFAULT_SITE_ACCESS_PASSWORD_HASH = "116070d3ce1fe6fcbf1a3147511bc32442b455a08e571814a490499a09371b5f";
+const DEFAULT_SITE_ACCESS_TTL_DAYS = 7;
+const SITE_SETTINGS_KEYS = ['access_password_hash','access_password','access_ttl_days'];
 
 let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[] };
 let state = { view:'overview', event:'', user:null, questionFilter:'pending', rewardProgressAvailable:true };
+let siteSettings = { access_password_hash: DEFAULT_SITE_ACCESS_PASSWORD_HASH, access_ttl_days: DEFAULT_SITE_ACCESS_TTL_DAYS, available:false };
 let pendingPkExcelRows = [];
 let pendingBirthExcelRows = [];
 const REWARD_PROGRESS_STATUSES = ['设计中','打样中','生产中','发放中','已完结'];
@@ -703,7 +708,7 @@ function setActive(v){
   const pkSubTitle=document.getElementById('pkSubTitle');
   if(pkSubTitle && mainView==='pk'){
     const labelMap={personal:'总数据排名',participant:'总选排名',event:'总选单场',birth:'生公排名'};
-    pkSubTitle.textContent='集资排名分类 · ' + (labelMap[v] || '总数据排名');
+    pkSubTitle.textContent='🍊排名分类 · ' + (labelMap[v] || '总数据排名');
   }
 
   const eventBox=document.getElementById('eventFilterBox');
@@ -762,7 +767,7 @@ function renderTable(){
   if(mainTable) mainTable.classList.remove('lotteryTable');
   let rows=[];
   if(state.view==='overview'){
-    title.textContent='集资数据总览';
+    title.textContent='🍊数据总览';
     thead.innerHTML='';
     const pkList=aggregateByUser(DATA.records);
     const birthList=birthByUser();
@@ -790,12 +795,12 @@ function renderTable(){
       <tr class="overviewHeroRow">
         <td colspan="3">
           <div class="overviewPanel">
-            <div class="overviewTitle">集资数据总览</div>
-            <div class="overviewDesc">数据分为总选集资与生公集资两部分；首页展示总数据、总选数据和生公数据的核心统计与排名摘要。</div>
+            <div class="overviewTitle">🍊数据总览</div>
+            <div class="overviewDesc">数据分为总选🍊与生公🍊两部分；首页展示总数据、总选数据和生公数据的核心统计与排名摘要。</div>
             <div class="overviewGrid">
-              <div class="overviewMini primary"><span>集资总额</span><b>${fmt(totalContribution)}</b></div>
-              <div class="overviewMini"><span>总选集资</span><b>${fmt(pkTotal)}</b></div>
-              <div class="overviewMini"><span>生公集资</span><b>${fmt(birthTotal)}</b></div>
+              <div class="overviewMini primary"><span>🍊总额</span><b>${fmt(totalContribution)}</b></div>
+              <div class="overviewMini"><span>总选🍊</span><b>${fmt(pkTotal)}</b></div>
+              <div class="overviewMini"><span>生公🍊</span><b>${fmt(birthTotal)}</b></div>
               <div class="overviewMini"><span>总参与人数</span><b>${allUserCount}</b></div>
             </div>
             <div class="overviewRankGrid">
@@ -809,7 +814,7 @@ function renderTable(){
     `;
     return;
   }else if(state.view==='participant'){
-    title.textContent='总选集资排名';
+    title.textContent='总选🍊排名';
     thead.innerHTML='<tr class="noteRow"><td colspan="3" class="small">票数按 33.5 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>总选金额</th></tr>';
     rows=aggregateByUser(DATA.records).map((p,i)=>({rank:i+1,name:p.name,value:p.total,votes:p.total/33.5,showVotes:true,search:p.name}));
   }else if(state.view==='event'){
@@ -819,7 +824,7 @@ function renderTable(){
     rows=aggregateByEventUser(DATA.records,event)
       .map((r,i)=>({rank:i+1,name:r.user_name,value:num(r.amount),votes:num(r.amount)/33.5,showVotes:true,search:`${r.user_name} ${r.event_name}`}));
   }else if(state.view==='birth'){
-    title.textContent='生公集资排名';
+    title.textContent='生公🍊排名';
     thead.innerHTML='<tr><th>排名</th><th>名称</th><th>生公金额</th></tr>';
     rows=birthByUser().map((p,i)=>({rank:i+1,name:p.name,value:p.total,search:p.name}));
   }else if(state.view==='personal'){
@@ -948,7 +953,7 @@ function renderPersonalSearch(){
       <div class="lookupMini"><span class="small">生公金额</span><b>${fmt(bTotal)}</b></div>
       <div class="lookupMini"><span class="small">最高单场</span><b>${escapeHtml(best.name)} ${fmt(best.amount)}</b></div>
     </div>
-    <div class="small" style="margin:2px 0 8px">集资合计仅供个人查询参考；总选排名只计算总选金额，生公不计入总选排名。</div>
+    <div class="small" style="margin:2px 0 8px">🍊合计仅供个人查询参考；总选排名只计算总选金额，生公不计入总选排名。</div>
     <div class="eventAmountList">
       ${pkRows.map(r=>`<div class="eventAmountItem"><div><b>${escapeHtml(r.name)}</b><div class="small">${escapeHtml(r.date||'')}</div></div><div class="amt">${fmt(r.amount)}</div></div>`).join('')}
       <div class="eventAmountItem"><div><b>生公专项</b><div class="small">独立统计，不计入总选</div></div><div class="amt">${fmt(bTotal)}</div></div>
@@ -967,7 +972,7 @@ function renderLookup(){
   const kw=(document.getElementById('nameLookup').value||'').trim().toLowerCase();
   const kwKey=nameKey(kw);
   const out=document.getElementById('lookupResult');
-  document.getElementById('lookupTitle').textContent = state.view==='rewards' ? '奖励兑现查询' : '个人集资查询';
+  document.getElementById('lookupTitle').textContent = state.view==='rewards' ? '奖励兑现查询' : '个人🍊查询';
   if(!kw){
     out.className='lookupResult small';
     out.innerHTML=state.view==='rewards' ? '输入名称查看奖励兑现情况。' : '输入完整或部分名称后，将显示该参与者信息。';
@@ -996,7 +1001,7 @@ function renderPersonalLookup(name,candidates,out){
       <div class="lookupMini"><span class="small">总选金额</span><b>${fmt(pkTotal)}</b></div>
       <div class="lookupMini"><span class="small">生公金额</span><b>${fmt(bTotal)}</b></div>
     </div>
-    <div class="small" style="margin:2px 0 8px">个人集资合计：${fmt(pkTotal+bTotal)}。该合计仅供个人查询参考，不参与总选排名。</div>
+    <div class="small" style="margin:2px 0 8px">个人🍊合计：${fmt(pkTotal+bTotal)}。该合计仅供个人查询参考，不参与总选排名。</div>
     <div class="eventAmountList">
       ${pkRows.map(r=>`<div class="eventAmountItem"><div><b>${escapeHtml(r.name)}</b><div class="small">${escapeHtml(r.date||'')}</div></div><div class="amt">${fmt(r.amount)}</div></div>`).join('')}
       <div class="eventAmountItem"><div><b>生公专项</b><div class="small">独立统计，不计入总选</div></div><div class="amt">${fmt(bTotal)}</div></div>
@@ -1031,14 +1036,14 @@ function renderRewardLookup(name,candidates,out){
     </details>`).join('') || '<div class="emptyState"><b>暂无总选奖励</b><div class="small">当前名称暂无符合条件的总选金额门槛奖励。</div></div>', only?'仅显示未兑现':'按单场总选金额计算')}
     ${rewardSection('生公奖励', renderBirthRewardGroups(birthRewards,birthAmount), `生公合计 ${fmt(birthAmount)}`)}
     ${rewardSection('特殊排名奖励', renderSpecialRankRewardsForUser(name) || '<div class="emptyState"><b>暂无特殊排名奖励</b><div class="small">后台记录后会显示在这里。</div></div>', `${specialCount} 项`)}
-    <div class="hint">总选奖励按单场总选金额判断；生公奖励按生公集资合计判断，其中生日留言册只显示最高达标档。特殊排名奖励由提供者独立提供，按后台记录显示。</div>`;
+    <div class="hint">总选奖励按单场总选金额判断；生公奖励按生公🍊合计判断，其中生日留言册只显示最高达标档。特殊排名奖励由提供者独立提供，按后台记录显示。</div>`;
 }
 
 function renderBirthRewardGroups(items,birthAmount){
   const groups = [...new Set(items.map(x=>x.group))];
   if(!groups.length){
     return `<details class="rewardDetails">
-      <summary><span>生公奖励 <span class="small">生公集资合计</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
+      <summary><span>生公奖励 <span class="small">生公🍊合计</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
       <div class="rewardList"><div class="small">暂无符合条件的生公奖励。</div></div>
     </details>`;
   }
@@ -1046,7 +1051,7 @@ function renderBirthRewardGroups(items,birthAmount){
     const groupItems = items.filter(x=>x.group===group);
     const groupRuleHint = groupItems.some(x=>x.highestOnly) ? '仅显示最高达标档' : '各档兼得';
     return `<details class="rewardDetails">
-      <summary><span>生公奖励 · ${escapeHtml(group)} <span class="small">生公集资合计 ｜ ${escapeHtml(groupRuleHint)}</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
+      <summary><span>生公奖励 · ${escapeHtml(group)} <span class="small">生公🍊合计 ｜ ${escapeHtml(groupRuleHint)}</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
       <div class="rewardList">
         ${groupItems.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}${x.note?' ｜ '+escapeHtml(x.note):''}</div>${renderRewardProgressLine(x.reward)}</div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
       </div>
@@ -1113,7 +1118,7 @@ async function openAdmin(){
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   updateAuthUI();
-  if(user){ renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); }
+  if(user){ renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderSiteSettingsAdmin(); }
 }
 function updateAuthUI(){
   document.getElementById('loginBox').classList.toggle('hidden',!!state.user);
@@ -1136,7 +1141,7 @@ document.getElementById('loginBtn').onclick=async()=>{
   const password=document.getElementById('adminPassword').value;
   const res=await sb.auth.signInWithPassword({email,password});
   if(res.error){document.getElementById('loginStatus').textContent='登录失败：'+res.error.message;return;}
-  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin();
+  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderSiteSettingsAdmin();
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
@@ -1148,6 +1153,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   if(t.dataset.adminTab==='lotteryAdmin') renderLotteryAdmin();
   if(t.dataset.adminTab==='questionAdmin') renderQuestionAdmin();
   if(t.dataset.adminTab==='operationLogAdmin') renderOperationLogs();
+  if(t.dataset.adminTab==='siteSettingsAdmin') renderSiteSettingsAdmin();
   if(t.dataset.adminTab==='rewardProgressAdmin') renderRewardProgressAdmin();
   if(t.dataset.adminTab==='adminOverview') renderAdminOverview();
 });
@@ -1170,8 +1176,8 @@ async function renderAdminOverview(){
   }
   const cards=[
     ['总选场次', pkEvents().length, '已创建 PK 场次'],
-    ['总选记录', DATA.records.length, '总选集资明细'],
-    ['生公记录', DATA.birthRecords.length, '生公集资明细'],
+    ['总选记录', DATA.records.length, '总选🍊明细'],
+    ['生公记录', DATA.birthRecords.length, '生公🍊明细'],
     ['未兑现奖励', normalUnfulfilled + specialUnfulfilled, '普通奖励 + 特殊奖励'],
     ['待回复提问', pendingQuestions, '匿名提问待处理'],
     ['前台公告', visibleAnnouncementCount, `全部 ${DATA.announcements.length} 条`],
@@ -1947,6 +1953,57 @@ async function renderOperationLogs(){
   `).join('') || '<tr><td colspan="3" class="small">暂无操作日志</td></tr>';
 }
 
+function renderSiteSettingsAdmin(){
+  const ttlInput=document.getElementById('siteAccessTtlDaysAdmin');
+  const passwordInput=document.getElementById('siteAccessPasswordAdmin');
+  const status=document.getElementById('siteSettingsStatus');
+  if(!ttlInput || !status) return;
+  ttlInput.value=siteSettings.access_ttl_days;
+  if(passwordInput) passwordInput.value='';
+  const source=siteSettings.available?'云端设置':'默认设置';
+  status.textContent=`当前使用${source}；用户输入正确后 ${siteSettings.access_ttl_days} 天内不需要再次输入。`;
+}
+
+async function saveSiteSettings(){
+  const passwordInput=document.getElementById('siteAccessPasswordAdmin');
+  const ttlInput=document.getElementById('siteAccessTtlDaysAdmin');
+  const status=document.getElementById('siteSettingsStatus');
+  if(!status) return;
+  const password=String(passwordInput?.value||'').trim();
+  const ttlDays=Math.round(Number(ttlInput?.value||siteSettings.access_ttl_days));
+  if(!Number.isFinite(ttlDays) || ttlDays<1 || ttlDays>365){
+    status.textContent='免输入天数请填写 1 到 365 之间的整数';
+    return;
+  }
+  const rows=[
+    {setting_key:'access_ttl_days',setting_value:String(ttlDays),updated_at:new Date().toISOString()}
+  ];
+  if(password){
+    if(password.length<4){
+      status.textContent='访问密码至少需要 4 位';
+      return;
+    }
+    rows.push({setting_key:'access_password_hash',setting_value:await sha256Hex(password),updated_at:new Date().toISOString()});
+  }
+  status.textContent='正在保存访问设置...';
+  const res=await sb.from('site_settings').upsert(rows,{onConflict:'setting_key'});
+  if(res.error){
+    status.textContent='保存失败：'+res.error.message+'。如果提示找不到 site_settings，请先执行 database/site_settings.sql。';
+    return;
+  }
+  await loadSiteSettings();
+  if(password){
+    const ttlMs=siteSettings.access_ttl_days*24*60*60*1000;
+    localStorage.setItem(SITE_ACCESS_STORAGE_KEY,JSON.stringify({
+      password_hash:siteSettings.access_password_hash,
+      expires_at:Date.now()+ttlMs
+    }));
+  }
+  await logOperation('update_site_access_settings', password?'修改访问密码和免输入天数':'修改免输入天数', {ttl_days:ttlDays,password_changed:!!password});
+  renderSiteSettingsAdmin();
+  status.textContent=`保存成功。当前免输入时长为 ${siteSettings.access_ttl_days} 天。`;
+}
+
 async function renderQuestionAdmin(){
   // 管理后台按状态筛选匿名提问，并在同一行内完成回复。
   const body=document.getElementById('questionAdminBody');
@@ -2255,6 +2312,10 @@ if(reloadLotteryBtn) reloadLotteryBtn.onclick=async()=>{await loadAll(); renderL
 
 const reloadOperationLogsBtn=document.getElementById('reloadOperationLogsBtn');
 if(reloadOperationLogsBtn) reloadOperationLogsBtn.onclick=renderOperationLogs;
+const saveSiteSettingsBtn=document.getElementById('saveSiteSettingsBtn');
+if(saveSiteSettingsBtn) saveSiteSettingsBtn.onclick=saveSiteSettings;
+const reloadSiteSettingsBtn=document.getElementById('reloadSiteSettingsBtn');
+if(reloadSiteSettingsBtn) reloadSiteSettingsBtn.onclick=async()=>{await loadSiteSettings(); renderSiteSettingsAdmin();};
 const reloadQuestionsBtn=document.getElementById('reloadQuestionsBtn');
 if(reloadQuestionsBtn) reloadQuestionsBtn.onclick=renderQuestionAdmin;
 document.querySelectorAll('.questionFilterBtn').forEach(btn=>{
@@ -2274,7 +2335,101 @@ document.getElementById('addAliasBtn').onclick=async()=>{
   if(!res.error){await logOperation('upsert_name_alias', `${alias_name} => ${canonical_name}`, {alias_name,canonical_name}); await loadAll();}
 };
 
+function unlockSiteAccess(){
+  document.body.classList.remove('accessLocked');
+  document.getElementById('accessGate')?.classList.add('hidden');
+}
+
+function parseAccessGrant(){
+  try{
+    const raw=localStorage.getItem(SITE_ACCESS_STORAGE_KEY);
+    if(!raw) return null;
+    const parsed=JSON.parse(raw);
+    if(typeof parsed!=='object' || !parsed) return null;
+    return parsed;
+  }catch(e){
+    localStorage.removeItem(SITE_ACCESS_STORAGE_KEY);
+    return null;
+  }
+}
+
+async function sha256Hex(value){
+  const data=new TextEncoder().encode(String(value));
+  const digest=await crypto.subtle.digest('SHA-256',data);
+  return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+async function loadSiteSettings(){
+  try{
+    const res=await sb.from('site_settings').select('setting_key,setting_value').in('setting_key',SITE_SETTINGS_KEYS);
+    if(res.error){
+      console.warn('site_settings unavailable:', res.error);
+      siteSettings={access_password_hash:DEFAULT_SITE_ACCESS_PASSWORD_HASH,access_ttl_days:DEFAULT_SITE_ACCESS_TTL_DAYS,available:false};
+      return siteSettings;
+    }
+    const next={access_password_hash:DEFAULT_SITE_ACCESS_PASSWORD_HASH,access_ttl_days:DEFAULT_SITE_ACCESS_TTL_DAYS,available:true};
+    const legacyPassword=(res.data||[]).find(row=>row.setting_key==='access_password')?.setting_value;
+    (res.data||[]).forEach(row=>{
+      if(row.setting_key==='access_password_hash' && String(row.setting_value||'').trim()){
+        next.access_password_hash=String(row.setting_value).trim();
+      }
+      if(row.setting_key==='access_ttl_days'){
+        const days=Number(row.setting_value);
+        if(Number.isFinite(days) && days>0) next.access_ttl_days=Math.min(365,Math.max(1,Math.round(days)));
+      }
+    });
+    if(next.access_password_hash===DEFAULT_SITE_ACCESS_PASSWORD_HASH && String(legacyPassword||'').trim()){
+      next.access_password_hash=await sha256Hex(String(legacyPassword).trim());
+    }
+    siteSettings=next;
+    return siteSettings;
+  }catch(e){
+    console.warn('site_settings load failed:', e);
+    siteSettings={access_password_hash:DEFAULT_SITE_ACCESS_PASSWORD_HASH,access_ttl_days:DEFAULT_SITE_ACCESS_TTL_DAYS,available:false};
+    return siteSettings;
+  }
+}
+
+function requireSiteAccess(){
+  const grant=parseAccessGrant();
+  if(grant?.password_hash===siteSettings.access_password_hash && Number(grant?.expires_at)>Date.now()){
+    unlockSiteAccess();
+    return Promise.resolve();
+  }
+  localStorage.removeItem(SITE_ACCESS_STORAGE_KEY);
+  const gate=document.getElementById('accessGate');
+  const form=document.getElementById('accessForm');
+  const input=document.getElementById('sitePasswordInput');
+  const status=document.getElementById('accessStatus');
+  gate?.classList.remove('hidden');
+  document.body.classList.add('accessLocked');
+  setTimeout(()=>input?.focus(),50);
+  return new Promise(resolve=>{
+    form.onsubmit=async e=>{
+      e.preventDefault();
+      const value=String(input.value||'').trim();
+      const valueHash=await sha256Hex(value);
+      if(valueHash!==siteSettings.access_password_hash){
+        status.textContent='密码不正确，请重新输入';
+        input.value='';
+        input.focus();
+        return;
+      }
+      const ttlMs=siteSettings.access_ttl_days*24*60*60*1000;
+      localStorage.setItem(SITE_ACCESS_STORAGE_KEY,JSON.stringify({
+        password_hash:siteSettings.access_password_hash,
+        expires_at:Date.now()+ttlMs
+      }));
+      status.textContent='';
+      unlockSiteAccess();
+      resolve();
+    };
+  });
+}
+
 (async function(){
+  await loadSiteSettings();
+  await requireSiteAccess();
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   await loadAll();

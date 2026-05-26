@@ -15,7 +15,7 @@ Use this checklist before pushing a release.
 - Notice text is visible: all data is for reference and includes the group code.
 - Main navigation works:
   - 数据总览
-  - 集资排名
+  - 🍊排名
   - 奖励查询
   - 公告通知
   - 抽奖结果
