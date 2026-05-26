@@ -4,8 +4,14 @@ details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;just
 .rewardDetailHint{display:block;color:#9a6a16;margin-top:3px;font-weight:700}
 .rewardList{padding:0 14px 12px 14px;display:grid;gap:8px}
 .rewardItem{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:12px;background:#fffaf0;border:1px solid var(--line)}
+.rewardSection{display:grid;gap:9px;margin-top:12px}
+.rewardSectionTitle{display:flex;justify-content:space-between;gap:10px;align-items:flex-end;border-bottom:1px solid #ead28b;padding-bottom:7px}
+.rewardSectionTitle b{font-size:15px;color:#3b2b12}
+.rewardProgressLine{margin-top:5px}
 .lotteryResult{text-align:left;display:grid;gap:8px;justify-items:stretch}
-.lotteryWinner{width:100%;padding:8px 10px;border-radius:12px;background:#fff8df;border:1px solid var(--line);color:var(--ink)}
+.lotteryDrawTime{color:#8a6a2f;font-size:12px;font-weight:800}
+.lotteryWinner{width:100%;padding:9px 10px;border-radius:12px;background:#fff8df;border:1px solid var(--line);color:var(--ink);display:grid;gap:4px}
+.lotteryWinner span{display:block}
 .lotteryPool{width:100%;margin-top:8px;text-align:left}
 .lotteryPool summary{cursor:pointer;text-align:left;color:#8a5b00;font-weight:800}
 .lotteryPoolList{margin-top:8px;max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fffaf0;padding:8px}
@@ -52,6 +58,8 @@ details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;just
 .announcementCard b{
   display:block;
   margin-bottom:5px;
+  font-size:15px;
+  color:#332813;
 }
 .announcementCard summary{
   cursor:pointer;
@@ -66,6 +74,7 @@ details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;just
 }
 .announcementHint{
   color:#9a6a16;
+  font-weight:800;
 }
 .announcementTypeHead,
 .announcementTypeCell{
@@ -90,7 +99,10 @@ details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;just
   justify-items:start;
 }
 .announcementBody{
-  margin-top:10px;
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid #f1dfae;
+  line-height:1.7;
   white-space:pre-wrap;
 }
 .announcementImage{

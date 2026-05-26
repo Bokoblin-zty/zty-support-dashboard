@@ -464,7 +464,17 @@ function renderLotteryWinners(value){
   const list=lotteryWinnerList(value);
   if(!list.length) return '<span class="small">暂无获奖结果</span>';
   const drawTime=lotteryDrawTime(value);
-  return `<div class="lotteryResult">${drawTime?`<div class="small">抽奖时间：${escapeHtml(formatDateTime(drawTime))}</div>`:''}${list.map(item=>`<div class="lotteryWinner"><b>${escapeHtml(winnerText(item) || '获奖结果')}</b></div>`).join('')}</div>`;
+  return `<div class="lotteryResult">
+    ${drawTime?`<div class="lotteryDrawTime">抽奖时间：${escapeHtml(formatDateTime(drawTime))}</div>`:''}
+    ${list.map(item=>{
+      if(item && typeof item === 'object' && !Array.isArray(item)){
+        const name=item.name || item.user_name || item.winner || item.winner_name || '';
+        const prize=item.prize || item.prize_name || item.reward || item.reward_name || '未填写';
+        return `<div class="lotteryWinner"><span>中奖人：<b>${escapeHtml(name || '-')}</b></span><span>奖品：<b>${escapeHtml(prize)}</b></span></div>`;
+      }
+      return `<div class="lotteryWinner"><span><b>${escapeHtml(winnerText(item) || '获奖结果')}</b></span></div>`;
+    }).join('')}
+  </div>`;
 }
 function renderLotteryPool(pool){
   const list=Array.isArray(pool) ? pool : [];
@@ -1004,21 +1014,23 @@ function renderRewardLookup(name,candidates,out){
   const birthAmount=DATA.birthRecords.filter(r=>r.user_name===name).reduce((s,r)=>s+r.amount,0);
   let birthRewards=birthRewardItemsFor(name,birthAmount);
   if(only) birthRewards=birthRewards.filter(x=>!x.fulfilled);
+  const specialCount=DATA.specialRankRewards.filter(r=>canon(r.winner_name)===canon(name)).length;
+  const rewardSection = (label, body, note='') => `<div class="rewardSection"><div class="rewardSectionTitle"><b>${escapeHtml(label)}</b>${note?`<span class="small">${escapeHtml(note)}</span>`:''}</div>${body}</div>`;
   out.className='lookupResult';
   out.innerHTML=candidates+`
     <div class="lookupSummary rewardLookupSummary">
       <div class="lookupMini"><span class="small">名称</span><b>${escapeHtml(name)}</b></div>
-      <div class="lookupMini"><span class="small">显示范围</span><b>${only?'未兑现':'全部'}</b></div>
-      <div class="lookupMini"><span class="small">说明</span><b>点开查看</b></div>
+      <div class="lookupMini"><span class="small">总选奖励</span><b>${rows.reduce((s,r)=>s+r.rewards.length,0)}</b></div>
+      <div class="lookupMini"><span class="small">生公奖励</span><b>${birthRewards.length}</b></div>
     </div>
-    ${rows.map(r=>`<details class="rewardDetails">
+    ${rewardSection('总选奖励', rows.map(r=>`<details class="rewardDetails">
       <summary><span>${escapeHtml(r.event)} <span class="small">${escapeHtml(r.date||'')}</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(r.amount)}</span></summary>
       <div class="rewardList">
         ${r.rewards.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}</div>${renderRewardProgressLine(x.reward)}</div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
       </div>
-    </details>`).join('') || '<div class="small">暂无符合条件的金额门槛奖励。</div>'}
-    ${renderBirthRewardGroups(birthRewards,birthAmount)}
-    ${renderSpecialRankRewardsForUser(name)}
+    </details>`).join('') || '<div class="emptyState"><b>暂无总选奖励</b><div class="small">当前名称暂无符合条件的总选金额门槛奖励。</div></div>', only?'仅显示未兑现':'按单场总选金额计算')}
+    ${rewardSection('生公奖励', renderBirthRewardGroups(birthRewards,birthAmount), `生公合计 ${fmt(birthAmount)}`)}
+    ${rewardSection('特殊排名奖励', renderSpecialRankRewardsForUser(name) || '<div class="emptyState"><b>暂无特殊排名奖励</b><div class="small">后台记录后会显示在这里。</div></div>', `${specialCount} 项`)}
     <div class="hint">总选奖励按单场总选金额判断；生公奖励按生公集资合计判断，其中生日留言册只显示最高达标档。特殊排名奖励由提供者独立提供，按后台记录显示。</div>`;
 }
 
@@ -1067,9 +1079,7 @@ function renderSpecialRankRewardsForUser(name){
   if(!items.length) return '';
 
   return `
-    <div style="margin-top:14px">
-      <h3 style="margin:4px 0 8px">特殊排名奖励</h3>
-      <div class="rewardList">
+      <div class="rewardList specialRewardList">
         ${items.map(r=>`<div class="rewardItem">
           <div>
             <b>${escapeHtml(r.reward_name)}</b>
@@ -1085,8 +1095,7 @@ function renderSpecialRankRewardsForUser(name){
             ${r.fulfilled ? `<span class="pill good">已兑现${r.fulfilled_date?' '+escapeHtml(r.fulfilled_date):''}</span>` : `<span class="pill warn">未兑现</span>`}
           </div>
         </div>`).join('')}
-      </div>
-    </div>`;
+      </div>`;
 }
 
 

@@ -358,6 +358,14 @@
   .rewardItem div:last-child{
     margin-top:0;
   }
+  .rewardSection{
+    gap:8px;
+    margin-top:10px;
+  }
+  .rewardSectionTitle{
+    align-items:flex-start;
+    padding-bottom:6px;
+  }
   details.rewardDetails summary{
     align-items:flex-start;
     padding:13px 14px;
@@ -443,6 +451,9 @@
   .lotteryResult .small{
     font-size:10px;
     line-height:1.25;
+  }
+  .lotteryDrawTime{
+    font-size:10px;
   }
   .lotteryWinner{
     padding:7px 8px;
