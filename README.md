@@ -21,6 +21,12 @@ database/
   policies.sql
   functions.sql
   README.md
+docs/
+  release-flow.md
+  versioning.md
+CHANGELOG.md
+RELEASE_CHECKLIST.md
+version.json
 questions.sql
 reward_progress.sql
 ```
@@ -56,3 +62,10 @@ git diff --check
 ```
 
 Then manually verify the checklist in `RELEASE_CHECKLIST.md`.
+
+## Release And Versioning
+
+- Current release metadata is stored in `version.json`.
+- User-facing release notes are stored in `CHANGELOG.md`.
+- Release steps are documented in `docs/release-flow.md`.
+- Version rules are documented in `docs/versioning.md`.

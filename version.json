@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "label": "测试版",
+  "build": 1,
+  "updated_at": "2026-05-26",
+  "notes": "Initial test version with data dashboard, admin tools, rewards, lottery, announcements, anonymous questions, reward production progress, and database documentation."
+}
