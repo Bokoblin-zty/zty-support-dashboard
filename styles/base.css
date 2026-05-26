@@ -25,7 +25,7 @@ input[type="search"],#search{flex:1;min-width:180px}
 .pill.bad{background:#fef2f2;color:#b91c1c}
 .hint{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.5}
 .small{font-size:12px;color:var(--muted)}
-.lotteryTable .pill{margin:0 auto}
+.lotteryTable td:first-child .pill{margin:0 auto}
 .status{font-size:13px;color:var(--muted);line-height:1.5}
 .hidden{display:none!important}
 .navRow .btn{width:100%;font-weight:800}

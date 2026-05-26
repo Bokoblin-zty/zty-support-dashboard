@@ -5,10 +5,11 @@ const SUPABASE_URL = "https://nmjjgqlcwiqbvpjkyink.supabase.co";
 const SUPABASE_KEY = "sb_publishable_lcaNfMEmLYmIk3Yhlu7Rzw_WfF5qtgX";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[] };
-let state = { view:'overview', event:'', user:null, questionFilter:'pending' };
+let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[] };
+let state = { view:'overview', event:'', user:null, questionFilter:'pending', rewardProgressAvailable:true };
 let pendingPkExcelRows = [];
 let pendingBirthExcelRows = [];
+const REWARD_PROGRESS_STATUSES = ['设计中','打样中','生产中','发放中','已完结'];
 
 /* =========================
    工具函数
@@ -87,7 +88,7 @@ const escapeHtml = s => String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'
 ========================= */
 async function loadAll(){
   // 一次性读取页面所需数据，并在进入渲染前完成名称统一和数字格式整理。
-  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards, announcements, lotteryRecords] = await Promise.all([
+  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards, announcements, lotteryRecords, rewardProgress] = await Promise.all([
     sb.from('pk_events').select('*').order('sort_order',{ascending:true}),
     sb.from('pk_records').select('*'),
     sb.from('birth_fund_records').select('*'),
@@ -98,11 +99,14 @@ async function loadAll(){
     sb.from('birth_reward_status').select('*'),
     sb.from('special_rank_rewards').select('*').order('created_at',{ascending:false}),
     sb.from('announcements').select('*').order('created_at',{ascending:false}),
-    sb.from('lottery_records').select('*').order('created_at',{ascending:false})
+    sb.from('lottery_records').select('*').order('created_at',{ascending:false}),
+    sb.from('reward_progress').select('*').order('reward_name',{ascending:true})
   ]);
   for(const res of [events,records,birth,status,aliases,rewardRules,birthRewardRules,birthRewardStatus,specialRankRewards,announcements,lotteryRecords]){
     if(res.error){ alert('读取数据失败：'+res.error.message); console.error(res.error); }
   }
+  state.rewardProgressAvailable = !rewardProgress.error;
+  if(rewardProgress.error) console.warn('reward_progress unavailable:', rewardProgress.error);
   DATA.aliases = aliases.data || [];
   const rawRecords = records.data || [];
   const rawBirthRecords = birth.data || [];
@@ -144,6 +148,7 @@ async function loadAll(){
   }));
   DATA.announcements = announcements.data || [];
   DATA.lotteryRecords = lotteryRecords.data || [];
+  DATA.rewardProgress = rewardProgress.error ? [] : (rewardProgress.data || []);
   DATA.specialRankRewards = rawSpecialRankRewards.map(r=>({
     ...r,
     target_rank: num(r.target_rank),
@@ -154,7 +159,7 @@ async function loadAll(){
   initControls();
   setActive(state.view);
   renderAll();
-  if(state.user){ renderAdminRewards(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); }
+  if(state.user){ renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); }
 }
 
 /* =========================
@@ -285,6 +290,55 @@ function allEarnedRewards(){
     }
   }
   return out;
+}
+function progressForReward(rewardName){
+  const name=String(rewardName||'').trim();
+  if(!name) return null;
+  return (DATA.rewardProgress || []).find(r=>r.reward_name===name) || null;
+}
+function renderRewardProgressLine(rewardName){
+  const progress=progressForReward(rewardName);
+  const status=progress?.progress_status || '暂未更新';
+  const note=progress?.progress_note ? `｜${escapeHtml(progress.progress_note)}` : '';
+  return `<div class="small rewardProgressLine">制作进度：<span class="pill ${status==='已完结'?'good':'warn'}">${escapeHtml(status)}</span>${note}</div>`;
+}
+function rewardOptionMap(){
+  const map=new Map();
+  const add=(name,type)=>{
+    const reward_name=String(name||'').trim();
+    if(!reward_name) return;
+    const prev=map.get(reward_name);
+    if(prev){
+      const types=new Set(String(prev.reward_type||'').split(' / ').filter(Boolean));
+      if(type) types.add(type);
+      prev.reward_type=[...types].join(' / ');
+    }else{
+      map.set(reward_name,{reward_name,reward_type:type || '其他'});
+    }
+  };
+  DATA.rewardRules.forEach(r=>add(r.reward_name,'总选奖励'));
+  DATA.birthRewardRules.forEach(r=>add(r.reward_name,'生公奖励'));
+  DATA.specialRankRewards.forEach(r=>add(r.reward_name,'特殊排名奖励'));
+  DATA.rewardProgress.forEach(r=>add(r.reward_name,r.reward_type || '其他'));
+  return map;
+}
+function allRewardProgressOptions(){
+  return [...rewardOptionMap().values()].sort((a,b)=>a.reward_name.localeCompare(b.reward_name,'zh-Hans-CN'));
+}
+async function syncRewardProgressCompleted(rewardName,rewardType=''){
+  if(!state.rewardProgressAvailable || !rewardName) return;
+  const payload={
+    reward_name:rewardName,
+    reward_type:rewardType || rewardOptionMap().get(rewardName)?.reward_type || '其他',
+    progress_status:'已完结',
+    progress_note:null,
+    updated_at:new Date().toISOString()
+  };
+  const res=await sb.from('reward_progress').upsert(payload,{onConflict:'reward_name'});
+  if(res.error){
+    state.rewardProgressAvailable=false;
+    console.warn('sync reward_progress failed:', res.error);
+  }
 }
 
 /* =========================
@@ -466,6 +520,7 @@ function operationActionLabel(action){
     update_special_rank_fulfilled:'更新特殊奖励兑现',
     delete_special_rank_reward:'删除特殊排名奖励',
     upsert_name_alias:'保存名称别名',
+    update_reward_progress:'更新制作进度',
     answer_question:'回复匿名提问'
   }[action] || action || '-';
 }
@@ -637,7 +692,7 @@ function setActive(v){
 
   const pkSubTitle=document.getElementById('pkSubTitle');
   if(pkSubTitle && mainView==='pk'){
-    const labelMap={personal:'总数据排名',participant:'总选排名',event:'单场总选',birth:'生公排名'};
+    const labelMap={personal:'总数据排名',participant:'总选排名',event:'总选单场',birth:'生公排名'};
     pkSubTitle.textContent='集资排名分类 · ' + (labelMap[v] || '总数据排名');
   }
 
@@ -678,7 +733,10 @@ function renderAll(){
   const mainTableCard=document.getElementById('mainTableCard');
   if(personalCard) personalCard.classList.toggle('hidden', state.view!=='personal');
   if(rewardCard) rewardCard.classList.toggle('hidden', state.view!=='rewards');
-  if(mainTableCard) mainTableCard.classList.toggle('hidden', state.view==='rewards');
+  if(mainTableCard){
+    mainTableCard.classList.toggle('hidden', state.view==='rewards');
+    mainTableCard.dataset.mobileView=state.view;
+  }
   updateAnnouncementBadge();
   renderTable();
   renderLookup();
@@ -707,15 +765,17 @@ function renderTable(){
       const birthAmount=birthList.find(p=>p.name===name)?.total || 0;
     return {name,total:pkAmount+birthAmount,pk:pkAmount,birth:birthAmount};
     }).sort((a,b)=>num(b.total)-num(a.total) || byNameAsc(a,b));
-    const topList = (rows, type) => rows.slice(0,3).map((r,i)=>`
-      <div class="overviewRankItem rank-${i+1}">
-        <div class="rankIdentity">
+    const topList = (rows, type) => rows.slice(0,3).map((r,i)=>{
+      const breakdown = type==='total' ? `<div class="small rankBreakdown mobileMeta">总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.birth)}</div>` : '';
+      return `<div class="overviewRankItem mobileListRow rank-${i+1}">
+        <div class="rankIdentity mobileMain">
           <span class="pill rankPill ${i===0?'top1':(i===1?'top2':'top3')}">#${i+1}</span>
           <b>${escapeHtml(r.name)}</b>
         </div>
-        <div class="small rankBreakdown">${type==='total'?`总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.birth)}`:(type==='pk'?'总选金额':'生公金额')}</div>
-        <div class="rankAmount"><strong>${fmt(r.total)}</strong></div>
-      </div>`).join('') || '<div class="small">暂无数据</div>';
+        ${breakdown}
+        <div class="rankAmount mobileValue"><strong>${fmt(r.total)}</strong></div>
+      </div>`;
+    }).join('') || '<div class="small">暂无数据</div>';
     tbody.innerHTML=`
       <tr class="overviewHeroRow">
         <td colspan="3">
@@ -744,7 +804,7 @@ function renderTable(){
     rows=aggregateByUser(DATA.records).map((p,i)=>({rank:i+1,name:p.name,value:p.total,votes:p.total/33.5,showVotes:true,search:p.name}));
   }else if(state.view==='event'){
     const event=state.event || pkEvents()[0]?.event_name;
-    title.textContent=`${event} · 单场总选排名`;
+    title.textContent=`${event} · 总选单场排名`;
     thead.innerHTML='<tr class="noteRow"><td colspan="3" class="small">票数按 33.5 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>金额</th></tr>';
     rows=aggregateByEventUser(DATA.records,event)
       .map((r,i)=>({rank:i+1,name:r.user_name,value:num(r.amount),votes:num(r.amount)/33.5,showVotes:true,search:`${r.user_name} ${r.event_name}`}));
@@ -773,29 +833,33 @@ function renderTable(){
     const items=visibleLotteryRecords();
     tbody.innerHTML=items.map(r=>{
       const rule=publicLotteryRule(r);
-      return `<tr><td><span class="pill">${escapeHtml(lotteryTypeLabel(r.lottery_type))}</span></td><td><b>${escapeHtml(r.lottery_name||'抽奖结果')}</b>${rule?`<div class="small">${escapeHtml(rule)}</div>`:''}</td><td>${renderLotteryResult(r)}</td></tr>`;
-    }).join('') || '<tr><td><span class="pill">抽奖</span></td><td><div class="emptyState"><b>暂无抽奖结果</b><div class="small">后台发布抽奖结果后，将在此处展示。</div></div></td><td>待更新</td></tr>';
+      return `<tr class="mobileListRow lotteryRecordRow"><td class="mobileLabel"><span class="pill">${escapeHtml(lotteryTypeLabel(r.lottery_type))}</span></td><td class="mobileMain"><b>${escapeHtml(r.lottery_name||'抽奖结果')}</b>${rule?`<div class="small mobileMeta">${escapeHtml(rule)}</div>`:''}</td><td class="mobileValue">${renderLotteryResult(r)}</td></tr>`;
+    }).join('') || '<tr class="mobileListRow lotteryRecordRow"><td class="mobileLabel"><span class="pill">抽奖</span></td><td class="mobileMain"><div class="emptyState"><b>暂无抽奖结果</b><div class="small">后台发布抽奖结果后，将在此处展示。</div></div></td><td class="mobileValue">待更新</td></tr>';
     return;
   }else if(state.view==='announcements'){
     title.textContent='公告通知';
-    thead.innerHTML='<tr><th>类型</th><th>说明</th><th>状态</th></tr>';
+    thead.innerHTML='<tr><th class="announcementTypeHead">类型</th><th class="announcementContentHead">说明</th></tr>';
     const items=visibleAnnouncements();
     tbody.innerHTML=items.map(a=>{
-      return `<tr><td><span class="pill ${a.is_pinned?'warn':''}">${a.is_pinned?'置顶':'公告'}</span></td><td>${renderAnnouncementDetail(a)}</td><td>已发布</td></tr>`;
-    }).join('') || '<tr><td><span class="pill warn">公告</span></td><td><div class="announcementCard"><b>暂无新增公告</b><div class="small">后台发布公告后，可在此区域查看通知内容。</div></div></td><td>待更新</td></tr>';
+      return `<tr class="mobileListRow announcementRow"><td class="mobileLabel announcementTypeCell"><span class="pill ${a.is_pinned?'warn':''}">${a.is_pinned?'置顶':'公告'}</span></td><td class="mobileMain">${renderAnnouncementDetail(a)}</td></tr>`;
+    }).join('') || '<tr class="mobileListRow announcementRow"><td class="mobileLabel announcementTypeCell"><span class="pill warn">公告</span></td><td class="mobileMain"><div class="announcementCard"><b>暂无新增公告</b><div class="small">后台发布公告后，可在此区域查看通知内容。</div></div></td></tr>';
     return;
   }else if(state.view==='questions'){
     title.textContent='匿名提问';
     thead.innerHTML='';
-    tbody.innerHTML=`<tr><td colspan="3">
-      <div class="questionPanel">
-        <div class="questionBox">
+    tbody.innerHTML=`<tr class="questionRow"><td colspan="3">
+      <div class="questionPanel mobileStack">
+        <div class="questionIntro mobileCard">
+          <b>匿名提问说明</b>
+          <div class="small">提交问题后会生成查询码，请自行保存。管理员回复后，可在“查询回答”中输入查询码查看回复。</div>
+        </div>
+        <div class="questionBox mobileCard">
           <h3>提交匿名提问</h3>
           <textarea id="questionText" placeholder="请输入想提问的内容"></textarea>
           <button class="btn good" id="submitQuestionBtn" type="button">提交提问并生成查询码</button>
           <div class="status" id="questionSubmitStatus"></div>
         </div>
-        <div class="questionBox">
+        <div class="questionBox mobileCard">
           <h3>查询回答</h3>
           <div class="lookupBox">
             <input id="questionCodeInput" placeholder="输入查询码，例如 QABCD123">
@@ -819,8 +883,8 @@ function renderTable(){
   rows=rows.filter(r=>!kw || r.search.toLowerCase().includes(kw));
   tbody.innerHTML=rows.map(r=>{
     const rankClass = r.rank===1 ? 'top1' : (r.rank===2 ? 'top2' : (r.rank===3 ? 'top3' : 'normal'));
-    const rowClass = r.rank<=3 ? ` class="rank-${r.rank}"` : '';
-    return `<tr${rowClass}><td><span class="pill rankPill ${rankClass}">#${r.rank}</span></td><td><b class="${r.rank<=3?'topName':''}">${escapeHtml(r.name)}</b>${state.view==='personal'?`<div class="small">总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.b)}</div>`:''}</td><td>${fmt(r.value)}${r.showVotes?`<div class="small">折合 ${fmtVotes(r.votes)} 票</div>`:''}</td></tr>`;
+    const rowClass = `mobileListRow rankRow${r.rank<=3 ? ` rank-${r.rank}` : ''}`;
+    return `<tr class="${rowClass}"><td class="mobileLabel"><span class="pill rankPill ${rankClass}">#${r.rank}</span></td><td class="mobileMain"><b class="${r.rank<=3?'topName':''}">${escapeHtml(r.name)}</b>${state.view==='personal'?`<div class="small mobileMeta">总选 ${fmt(r.pk)} ｜ 生公 ${fmt(r.b)}</div>`:''}</td><td class="mobileValue">${fmt(r.value)}${r.showVotes?`<div class="small mobileMeta">折合 ${fmtVotes(r.votes)} 票</div>`:''}</td></tr>`;
   }).join('') || '<tr><td colspan="3" class="small">无匹配数据</td></tr>';
 }
 
@@ -942,7 +1006,7 @@ function renderRewardLookup(name,candidates,out){
   if(only) birthRewards=birthRewards.filter(x=>!x.fulfilled);
   out.className='lookupResult';
   out.innerHTML=candidates+`
-    <div class="lookupSummary">
+    <div class="lookupSummary rewardLookupSummary">
       <div class="lookupMini"><span class="small">名称</span><b>${escapeHtml(name)}</b></div>
       <div class="lookupMini"><span class="small">显示范围</span><b>${only?'未兑现':'全部'}</b></div>
       <div class="lookupMini"><span class="small">说明</span><b>点开查看</b></div>
@@ -950,7 +1014,7 @@ function renderRewardLookup(name,candidates,out){
     ${rows.map(r=>`<details class="rewardDetails">
       <summary><span>${escapeHtml(r.event)} <span class="small">${escapeHtml(r.date||'')}</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(r.amount)}</span></summary>
       <div class="rewardList">
-        ${r.rewards.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}</div></div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
+        ${r.rewards.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}</div>${renderRewardProgressLine(x.reward)}</div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
       </div>
     </details>`).join('') || '<div class="small">暂无符合条件的金额门槛奖励。</div>'}
     ${renderBirthRewardGroups(birthRewards,birthAmount)}
@@ -972,7 +1036,7 @@ function renderBirthRewardGroups(items,birthAmount){
     return `<details class="rewardDetails">
       <summary><span>生公奖励 · ${escapeHtml(group)} <span class="small">生公集资合计 ｜ ${escapeHtml(groupRuleHint)}</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
       <div class="rewardList">
-        ${groupItems.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}${x.note?' ｜ '+escapeHtml(x.note):''}</div></div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
+        ${groupItems.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}${x.note?' ｜ '+escapeHtml(x.note):''}</div>${renderRewardProgressLine(x.reward)}</div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
       </div>
     </details>`;
   }).join('');
@@ -1014,6 +1078,7 @@ function renderSpecialRankRewardsForUser(name){
               ${r.provider_name ? `｜ 提供者：${escapeHtml(r.provider_name)}` : ''}
             </div>
             ${r.note ? `<div class="small">备注：${escapeHtml(r.note)}</div>` : ''}
+            ${renderRewardProgressLine(r.reward_name)}
           </div>
           <div>
             ${specialStatusPill(r.status)}
@@ -1039,7 +1104,7 @@ async function openAdmin(){
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   updateAuthUI();
-  if(user){ renderAdminRewards(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); }
+  if(user){ renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); }
 }
 function updateAuthUI(){
   document.getElementById('loginBox').classList.toggle('hidden',!!state.user);
@@ -1062,7 +1127,7 @@ document.getElementById('loginBtn').onclick=async()=>{
   const password=document.getElementById('adminPassword').value;
   const res=await sb.auth.signInWithPassword({email,password});
   if(res.error){document.getElementById('loginStatus').textContent='登录失败：'+res.error.message;return;}
-  state.user=res.data.user; updateAuthUI(); renderAdminRewards(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin();
+  state.user=res.data.user; updateAuthUI(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin();
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
@@ -1074,6 +1139,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   if(t.dataset.adminTab==='lotteryAdmin') renderLotteryAdmin();
   if(t.dataset.adminTab==='questionAdmin') renderQuestionAdmin();
   if(t.dataset.adminTab==='operationLogAdmin') renderOperationLogs();
+  if(t.dataset.adminTab==='rewardProgressAdmin') renderRewardProgressAdmin();
 });
 
 document.getElementById('reloadRewards').onclick=()=>renderAdminRewards();
@@ -1098,7 +1164,54 @@ async function toggleReward(r){
   const payload={user_name:r.user_name,event_name:r.event_name,reward_name:r.reward_name,fulfilled:newVal,fulfilled_date:date};
   const res=await sb.from('reward_status').upsert(payload,{onConflict:'user_name,event_name,reward_name'});
   if(res.error){alert('保存失败：'+res.error.message);return;}
+  if(newVal) await syncRewardProgressCompleted(r.reward_name,'总选奖励');
   await logOperation('update_reward_status', `${r.user_name}｜${r.event_name}｜${r.reward_name}`, payload);
+  await loadAll();
+}
+
+function renderRewardProgressAdmin(){
+  const select=document.getElementById('rewardProgressName');
+  const body=document.getElementById('rewardProgressBody');
+  const status=document.getElementById('rewardProgressStatusText');
+  if(!select || !body) return;
+  const options=allRewardProgressOptions();
+  const current=select.value;
+  select.innerHTML=options.map(x=>`<option value="${escapeHtml(x.reward_name)}">${escapeHtml(x.reward_name)}${x.reward_type?`｜${escapeHtml(x.reward_type)}`:''}</option>`).join('');
+  if(current && options.some(x=>x.reward_name===current)) select.value=current;
+  const selected=select.value || options[0]?.reward_name || '';
+  const progress=progressForReward(selected);
+  const statusSelect=document.getElementById('rewardProgressStatus');
+  const noteInput=document.getElementById('rewardProgressNote');
+  if(statusSelect) statusSelect.value=progress?.progress_status || REWARD_PROGRESS_STATUSES[0];
+  if(noteInput) noteInput.value=progress?.progress_note || '';
+  if(status) status.textContent=state.rewardProgressAvailable ? '' : '请先在 Supabase 创建 reward_progress 表，创建后刷新页面即可使用。';
+  body.innerHTML=options.map(item=>{
+    const p=progressForReward(item.reward_name);
+    return `<tr>
+      <td><b>${escapeHtml(item.reward_name)}</b><div class="small">${escapeHtml(item.reward_type || '其他')}</div></td>
+      <td>${p?`<span class="pill ${p.progress_status==='已完结'?'good':'warn'}">${escapeHtml(p.progress_status || '暂未更新')}</span><div class="small">${p.updated_at?escapeHtml(formatDateTime(p.updated_at)):''}</div>`:'<span class="pill warn">暂未更新</span>'}</td>
+      <td>${escapeHtml(p?.progress_note || '-')}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="3" class="small">暂无已导入奖励</td></tr>';
+}
+
+async function saveRewardProgress(){
+  const reward_name=document.getElementById('rewardProgressName')?.value || '';
+  const progress_status=document.getElementById('rewardProgressStatus')?.value || '';
+  const progress_note=document.getElementById('rewardProgressNote')?.value.trim() || '';
+  const status=document.getElementById('rewardProgressStatusText');
+  if(!reward_name){status.textContent='暂无可选择的奖励';return;}
+  if(!REWARD_PROGRESS_STATUSES.includes(progress_status)){status.textContent='请选择有效进度';return;}
+  const reward_type=rewardOptionMap().get(reward_name)?.reward_type || '其他';
+  const payload={reward_name,reward_type,progress_status,progress_note:progress_note || null,updated_at:new Date().toISOString()};
+  const res=await sb.from('reward_progress').upsert(payload,{onConflict:'reward_name'});
+  if(res.error){
+    state.rewardProgressAvailable=false;
+    status.textContent='保存失败：'+res.error.message;
+    return;
+  }
+  status.textContent='保存成功';
+  await logOperation('update_reward_progress', `${reward_name}｜${progress_status}`, payload);
   await loadAll();
 }
 
@@ -1910,6 +2023,7 @@ async function toggleSpecialRankFulfilled(id){
   const date = newVal ? ((dateInput?.value || '').trim() || item.fulfilled_date || '') : null;
   const res=await sb.from('special_rank_rewards').update({fulfilled:newVal, fulfilled_date:date}).eq('id', id);
   if(res.error){alert('保存失败：'+res.error.message);return;}
+  if(newVal) await syncRewardProgressCompleted(item.reward_name,'特殊排名奖励');
   await logOperation('update_special_rank_fulfilled', `${item.event_name}｜${item.reward_name}`, {id,fulfilled:newVal,fulfilled_date:date});
   await loadAll();
 }
@@ -1978,6 +2092,13 @@ document.getElementById('addSpecialRankBtn').onclick=async()=>{
 
 const refreshUnfulfilledBtn=document.getElementById('refreshUnfulfilledBtn');
 if(refreshUnfulfilledBtn) refreshUnfulfilledBtn.onclick=renderUnfulfilledAdmin;
+
+const rewardProgressName=document.getElementById('rewardProgressName');
+if(rewardProgressName) rewardProgressName.onchange=renderRewardProgressAdmin;
+const saveRewardProgressBtn=document.getElementById('saveRewardProgressBtn');
+if(saveRewardProgressBtn) saveRewardProgressBtn.onclick=saveRewardProgress;
+const reloadRewardProgressBtn=document.getElementById('reloadRewardProgressBtn');
+if(reloadRewardProgressBtn) reloadRewardProgressBtn.onclick=async()=>{await loadAll(); renderRewardProgressAdmin();};
 
 const previewPkExcelBtn=document.getElementById('previewPkExcelBtn');
 if(previewPkExcelBtn) previewPkExcelBtn.onclick=()=>previewOrderExcel('pk');

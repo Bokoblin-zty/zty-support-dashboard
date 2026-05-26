@@ -15,10 +15,11 @@
 </head>
 <body>
 <header class="siteHero">
+  <div class="siteVersion">v1.0 测试版</div>
   <div class="wrap heroInner">
     <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
     <h1 id="title">周童玥应援会数据站</h1>
-    <div class="sub">所有数据仅供参考，如发现遗漏或错误数据请联系群主修改。</div>
+    <div class="sub">所有数据仅供参考，如发现遗漏或错误数据请联系群主修改。神秘代码：158139179</div>
   </div>
 </header>
 
@@ -56,7 +57,7 @@
         <div class="navRow pkNav">
           <button class="btn" data-view="personal">总数据排名</button>
           <button class="btn" data-view="participant">总选排名</button>
-          <button class="btn" data-view="event">单场总选</button>
+          <button class="btn" data-view="event">总选单场</button>
           <button class="btn" data-view="birth">生公排名</button>
         </div>
       </div>
@@ -130,6 +131,7 @@
         <button class="tab" data-admin-tab="aliasAdmin">名称别名</button>
         <span class="adminGroupLabel">奖励管理</span>
         <button class="tab active" data-admin-tab="rewardAdmin">奖励兑现</button>
+        <button class="tab" data-admin-tab="rewardProgressAdmin">制作进度</button>
         <button class="tab" data-admin-tab="ruleImportAdmin">导入奖励规则</button>
         <button class="tab" data-admin-tab="specialRankAdmin">特殊排名奖励</button>
         <button class="tab" data-admin-tab="unfulfilledAdmin">未兑现总表</button>
@@ -150,6 +152,28 @@
         </div>
         <div class="small">勾选奖励后会写入 Supabase。若填写日期，将作为兑现日期保存。</div>
         <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>用户 / 场次 / 奖励</th><th>操作</th></tr></thead><tbody id="rewardAdminBody"></tbody></table></div>
+      </div>
+
+      <div class="adminSection" id="rewardProgressAdmin">
+        <h3>奖励制作进度</h3>
+        <div class="small">自动列出已导入的奖励名称。这里维护的是奖励整体制作状态，前台用户查询奖励时会同步看到。</div>
+        <div class="formGrid">
+          <select id="rewardProgressName"></select>
+          <select id="rewardProgressStatus">
+            <option>设计中</option>
+            <option>打样中</option>
+            <option>生产中</option>
+            <option>发放中</option>
+            <option>已完结</option>
+          </select>
+          <input id="rewardProgressNote" placeholder="进度说明，可空">
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn good" id="saveRewardProgressBtn" type="button">保存进度</button>
+          <button class="btn" id="reloadRewardProgressBtn" type="button">刷新进度</button>
+        </div>
+        <div class="status" id="rewardProgressStatusText"></div>
+        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>奖励</th><th>当前进度</th><th>说明</th></tr></thead><tbody id="rewardProgressBody"></tbody></table></div>
       </div>
 
       <div class="adminSection" id="eventAdmin">

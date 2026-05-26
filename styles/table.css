@@ -4,15 +4,21 @@ details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;just
 .rewardDetailHint{display:block;color:#9a6a16;margin-top:3px;font-weight:700}
 .rewardList{padding:0 14px 12px 14px;display:grid;gap:8px}
 .rewardItem{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:12px;background:#fffaf0;border:1px solid var(--line)}
-.lotteryResult{text-align:center;display:grid;gap:8px;justify-items:center}
+.lotteryResult{text-align:left;display:grid;gap:8px;justify-items:stretch}
 .lotteryWinner{width:100%;padding:8px 10px;border-radius:12px;background:#fff8df;border:1px solid var(--line);color:var(--ink)}
 .lotteryPool{width:100%;margin-top:8px;text-align:left}
-.lotteryPool summary{cursor:pointer;text-align:center;color:#8a5b00;font-weight:800}
+.lotteryPool summary{cursor:pointer;text-align:left;color:#8a5b00;font-weight:800}
 .lotteryPoolList{margin-top:8px;max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fffaf0;padding:8px}
-.lotteryTable th,.lotteryTable td{text-align:center!important;vertical-align:middle}
+.lotteryTable th,.lotteryTable td{text-align:left!important;vertical-align:middle}
+.lotteryTable th:first-child,.lotteryTable td:first-child{text-align:center!important;width:130px}
+.lotteryTable th:last-child,.lotteryTable td:last-child{text-align:left!important;width:360px}
 .lotteryTable td:nth-child(2){line-height:1.5}
-.questionPanel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;text-align:left}
+.questionPanel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"intro intro" "submit query";gap:14px;text-align:left;align-items:start}
+.questionIntro{grid-area:intro;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,#fff,#fff8df);padding:14px;line-height:1.55}
+.questionIntro b{display:block;margin-bottom:4px}
 .questionBox,.questionAnswer{border:1px solid var(--line);border-radius:14px;background:#fffaf0;padding:14px}
+.questionIntro+.questionBox{grid-area:submit}
+.questionIntro+.questionBox+.questionBox{grid-area:query}
 .questionBox h3{margin-top:0}
 .questionResult{margin-top:10px}
 .questionAnswer{display:grid;gap:8px}
@@ -61,6 +67,28 @@ details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;just
 .announcementHint{
   color:#9a6a16;
 }
+.announcementTypeHead,
+.announcementTypeCell{
+  width:120px;
+  text-align:center !important;
+  vertical-align:middle;
+}
+.announcementContentHead,
+.announcementRow .mobileMain{
+  text-align:left !important;
+}
+.announcementTypeCell .pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.announcementRow .announcementCard{
+  width:100%;
+  text-align:left;
+}
+.announcementRow .announcementCard summary span{
+  justify-items:start;
+}
 .announcementBody{
   margin-top:10px;
   white-space:pre-wrap;
@@ -74,4 +102,83 @@ details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;just
   border-radius:12px;
   border:1px solid #ead28b;
   background:#fff;
+}
+
+@media(min-width:901px){
+  #mainTableCard{
+    overflow:hidden;
+  }
+  #mainTableCard[data-mobile-view="personal"] .table th:first-child,
+  #mainTableCard[data-mobile-view="participant"] .table th:first-child,
+  #mainTableCard[data-mobile-view="event"] .table th:first-child,
+  #mainTableCard[data-mobile-view="birth"] .table th:first-child,
+  #mainTableCard[data-mobile-view="personal"] .table td:first-child,
+  #mainTableCard[data-mobile-view="participant"] .table td:first-child,
+  #mainTableCard[data-mobile-view="event"] .table td:first-child,
+  #mainTableCard[data-mobile-view="birth"] .table td:first-child{
+    width:116px;
+    text-align:center;
+    vertical-align:middle;
+  }
+  #mainTableCard[data-mobile-view="personal"] .table td:nth-child(2),
+  #mainTableCard[data-mobile-view="participant"] .table td:nth-child(2),
+  #mainTableCard[data-mobile-view="event"] .table td:nth-child(2),
+  #mainTableCard[data-mobile-view="birth"] .table td:nth-child(2){
+    vertical-align:middle;
+  }
+  #mainTableCard[data-mobile-view="personal"] .table td:last-child,
+  #mainTableCard[data-mobile-view="participant"] .table td:last-child,
+  #mainTableCard[data-mobile-view="event"] .table td:last-child,
+  #mainTableCard[data-mobile-view="birth"] .table td:last-child{
+    min-width:180px;
+    vertical-align:middle;
+    color:#c78500;
+    font-weight:900;
+  }
+  #mainTableCard[data-mobile-view="announcements"] .table,
+  #mainTableCard[data-mobile-view="lottery"] .table{
+    border-collapse:separate;
+    border-spacing:0 10px;
+  }
+  #mainTableCard[data-mobile-view="announcements"] .table th,
+  #mainTableCard[data-mobile-view="lottery"] .table th{
+    padding:0 10px 4px;
+    border-bottom:1px solid #ead28b;
+  }
+  #mainTableCard[data-mobile-view="announcements"] .table td,
+  #mainTableCard[data-mobile-view="lottery"] .table td{
+    border-bottom:0;
+    background:#fffaf0;
+    vertical-align:middle;
+  }
+  #mainTableCard[data-mobile-view="announcements"] .table td:first-child,
+  #mainTableCard[data-mobile-view="lottery"] .table td:first-child{
+    border:1px solid #ead28b;
+    border-right:0;
+    border-radius:16px 0 0 16px;
+  }
+  #mainTableCard[data-mobile-view="announcements"] .table td:last-child,
+  #mainTableCard[data-mobile-view="lottery"] .table td:last-child{
+    border:1px solid #ead28b;
+    border-left:0;
+    border-radius:0 16px 16px 0;
+  }
+  #mainTableCard[data-mobile-view="lottery"] .table td:nth-child(2){
+    border-top:1px solid #ead28b;
+    border-bottom:1px solid #ead28b;
+  }
+  #mainTableCard[data-mobile-view="announcements"] .announcementCard{
+    border:0;
+    border-left:4px solid #d99a16;
+    border-radius:12px;
+    background:#fff;
+    box-shadow:none;
+  }
+  #mainTableCard[data-mobile-view="lottery"] .lotteryWinner{
+    background:#fff;
+  }
+  #mainTableCard[data-mobile-view="questions"] .table td{
+    border-bottom:0;
+    padding-top:4px;
+  }
 }

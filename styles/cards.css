@@ -177,9 +177,11 @@
 }
 .overviewRankItem{
   display:grid;
-  grid-template-columns:1fr;
-  align-items:start;
-  gap:5px;
+  grid-template-columns:minmax(0,1fr) max-content;
+  grid-template-rows:auto auto;
+  align-items:center;
+  gap:4px 12px;
+  min-height:64px;
   padding:9px 0;
   border-top:1px solid #f2e3b8;
 }
@@ -191,6 +193,8 @@
   align-items:center;
   gap:8px;
   min-width:0;
+  grid-column:1;
+  grid-row:1;
 }
 .rankIdentity b{
   min-width:0;
@@ -198,19 +202,36 @@
 }
 .rankBreakdown{
   grid-column:1/-1;
+  grid-row:2;
   padding-left:52px;
 }
 .overviewRankItem b,.overviewRankItem strong{
   overflow-wrap:anywhere;
 }
 .rankAmount{
-  padding-left:52px;
-  text-align:left;
+  grid-column:2;
+  grid-row:1;
+  padding-left:0;
+  text-align:right;
 }
 .rankAmount strong{
   display:block;
   color:#c78500;
   font-size:14px;
+}
+@media(min-width:901px){
+  .overviewRankItem::after{
+    content:"";
+    grid-column:1/-1;
+    grid-row:2;
+    min-height:16px;
+    padding-left:52px;
+    visibility:hidden;
+  }
+  .overviewRankItem .rankIdentity,
+  .overviewRankItem .rankAmount{
+    align-self:center;
+  }
 }
 .lookupCard{
   background:linear-gradient(180deg,#fff,#fffaf0);
