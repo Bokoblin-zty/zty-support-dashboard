@@ -124,13 +124,15 @@
       </div>
 
       <div class="tabs">
+        <span class="adminGroupLabel">概览</span>
+        <button class="tab active" data-admin-tab="adminOverview">管理总览</button>
         <span class="adminGroupLabel">数据管理</span>
         <button class="tab" data-admin-tab="eventAdmin">总选场次</button>
         <button class="tab" data-admin-tab="pkImportAdmin">导入总选</button>
         <button class="tab" data-admin-tab="birthImportAdmin">导入生公</button>
         <button class="tab" data-admin-tab="aliasAdmin">名称别名</button>
         <span class="adminGroupLabel">奖励管理</span>
-        <button class="tab active" data-admin-tab="rewardAdmin">奖励兑现</button>
+        <button class="tab" data-admin-tab="rewardAdmin">奖励兑现</button>
         <button class="tab" data-admin-tab="rewardProgressAdmin">制作进度</button>
         <button class="tab" data-admin-tab="ruleImportAdmin">导入奖励规则</button>
         <button class="tab" data-admin-tab="specialRankAdmin">特殊排名奖励</button>
@@ -143,7 +145,17 @@
         <button class="tab" data-admin-tab="operationLogAdmin">操作日志</button>
       </div>
 
-      <div class="adminSection active" id="rewardAdmin">
+      <div class="adminSection active" id="adminOverview">
+        <h3>管理总览</h3>
+        <div class="adminLead">这里汇总当前数据站的关键状态，便于进入后台后先确认数据、奖励、公告、抽奖和提问是否需要处理。</div>
+        <div class="adminOverviewGrid" id="adminOverviewStats"></div>
+        <div class="adminSubhead">最近操作</div>
+        <div class="adminOverviewLogs" id="adminOverviewLogs">
+          <div class="small">打开后台后将自动读取最近操作。</div>
+        </div>
+      </div>
+
+      <div class="adminSection" id="rewardAdmin">
         <h3>奖励兑现管理</h3>
         <div class="formGrid">
           <input id="rewardSearch" type="search" placeholder="搜索用户名 / 场次 / 奖励">

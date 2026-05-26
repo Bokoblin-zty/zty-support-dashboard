@@ -1104,7 +1104,7 @@ async function openAdmin(){
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   updateAuthUI();
-  if(user){ renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); }
+  if(user){ renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); }
 }
 function updateAuthUI(){
   document.getElementById('loginBox').classList.toggle('hidden',!!state.user);
@@ -1127,7 +1127,7 @@ document.getElementById('loginBtn').onclick=async()=>{
   const password=document.getElementById('adminPassword').value;
   const res=await sb.auth.signInWithPassword({email,password});
   if(res.error){document.getElementById('loginStatus').textContent='登录失败：'+res.error.message;return;}
-  state.user=res.data.user; updateAuthUI(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin();
+  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin();
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
@@ -1140,10 +1140,47 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   if(t.dataset.adminTab==='questionAdmin') renderQuestionAdmin();
   if(t.dataset.adminTab==='operationLogAdmin') renderOperationLogs();
   if(t.dataset.adminTab==='rewardProgressAdmin') renderRewardProgressAdmin();
+  if(t.dataset.adminTab==='adminOverview') renderAdminOverview();
 });
 
 document.getElementById('reloadRewards').onclick=()=>renderAdminRewards();
 document.getElementById('rewardSearch').oninput=()=>renderAdminRewards();
+
+async function renderAdminOverview(){
+  const stats=document.getElementById('adminOverviewStats');
+  const logs=document.getElementById('adminOverviewLogs');
+  if(!stats || !logs) return;
+  const normalUnfulfilled=allEarnedRewards().filter(r=>!r.fulfilled).length;
+  const specialUnfulfilled=(DATA.specialRankRewards || []).filter(r=>!r.fulfilled).length;
+  const visibleAnnouncementCount=(DATA.announcements || []).filter(a=>a.is_visible !== false).length;
+  const totalRewardCount=allRewardProgressOptions().length;
+  let pendingQuestions='-';
+  const questionRes=await sb.from('questions').select('answer_text').limit(1000);
+  if(!questionRes.error){
+    pendingQuestions=(questionRes.data || []).filter(q=>!q.answer_text).length;
+  }
+  const cards=[
+    ['总选场次', pkEvents().length, '已创建 PK 场次'],
+    ['总选记录', DATA.records.length, '总选集资明细'],
+    ['生公记录', DATA.birthRecords.length, '生公集资明细'],
+    ['未兑现奖励', normalUnfulfilled + specialUnfulfilled, '普通奖励 + 特殊奖励'],
+    ['待回复提问', pendingQuestions, '匿名提问待处理'],
+    ['前台公告', visibleAnnouncementCount, `全部 ${DATA.announcements.length} 条`],
+    ['抽奖记录', DATA.lotteryRecords.length, '已发布抽奖结果'],
+    ['奖励品类', totalRewardCount, '制作进度可维护项']
+  ];
+  stats.innerHTML=cards.map(([label,value,note])=>`<div class="adminOverviewCard"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b><small>${escapeHtml(note)}</small></div>`).join('');
+  logs.innerHTML='<div class="small">正在读取最近操作...</div>';
+  const logRes=await sb.from('operation_logs').select('*').order('created_at',{ascending:false}).limit(5);
+  if(logRes.error){
+    logs.innerHTML=`<div class="small">最近操作读取失败：${escapeHtml(logRes.error.message)}</div>`;
+    return;
+  }
+  logs.innerHTML=(logRes.data || []).map(row=>`<div class="adminLogItem">
+    <div><b>${escapeHtml(row.detail || '-')}</b><div class="small">${escapeHtml(formatDateTime(row.created_at))} ｜ ${escapeHtml(row.admin_email || '-')}</div></div>
+    <span class="pill">${escapeHtml(operationActionLabel(row.action))}</span>
+  </div>`).join('') || '<div class="small">暂无操作日志</div>';
+}
 
 function renderAdminRewards(){
   const kw=(document.getElementById('rewardSearch').value||'').toLowerCase().trim();

@@ -506,6 +506,15 @@
     grid-template-columns:1fr;
     gap:8px;
   }
+  .adminOverviewGrid{
+    grid-template-columns:1fr 1fr;
+  }
+  .adminLogItem{
+    grid-template-columns:1fr;
+  }
+  .adminLogItem .pill{
+    justify-self:start;
+  }
   .ruleRowsList{
     overflow:auto;
     -webkit-overflow-scrolling:touch;

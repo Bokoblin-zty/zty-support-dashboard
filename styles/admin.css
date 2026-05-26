@@ -21,6 +21,15 @@
 .tabs{border:1px solid var(--line);border-radius:18px;background:#fffaf0;padding:10px;align-items:center}
 .tab{background:linear-gradient(180deg,#fff,#fff9e8);color:#5c4213}
 .adminGroupLabel{min-height:34px;border-left:3px solid var(--accent);padding-left:8px;margin-left:4px}
+.adminOverviewGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}
+.adminOverviewCard{border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;min-height:82px}
+.adminOverviewCard span{display:block;color:var(--muted);font-size:12px;font-weight:800;margin-bottom:7px}
+.adminOverviewCard b{display:block;color:#c78500;font-size:24px;line-height:1.1}
+.adminOverviewCard small{display:block;color:var(--muted);margin-top:6px;line-height:1.35}
+.adminOverviewLogs{display:grid;gap:8px}
+.adminLogItem{border:1px solid var(--line);border-radius:14px;background:#fff;padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.adminLogItem b{color:#3b2b12}
+.adminLogItem .pill{justify-self:end}
 .aliasExample{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
 .aliasArrow{color:#9a6a16;font-weight:900}
 .ruleRowsBox{border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;margin-top:10px}
