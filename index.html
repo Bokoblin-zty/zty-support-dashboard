@@ -70,7 +70,7 @@
   </div>
 
   <div class="card lookupCard hidden" id="personalLookupCard">
-    <h3 style="margin-top:0">个人集资查询</h3>
+    <h3 class="cardTitle">个人集资查询</h3>
     <div class="lookupBox">
       <input id="personalLookup" list="nameOptions" type="search" placeholder="输入名称，查询总选、生公和集资合计" autocomplete="off" />
       <button class="btn" id="clearPersonalLookup" type="button">清空</button>
@@ -80,18 +80,18 @@
 
   
 <div class="card contentCard" id="mainTableCard">
-    <h3 style="margin-top:0" class="tableTitle" id="tableTitle">集资数据总览</h3>
+    <h3 class="tableTitle cardTitle" id="tableTitle">集资数据总览</h3>
     <div class="list"><table class="table"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
   </div>
 
   <div class="card lookupCard" id="lookupCard">
-    <h3 style="margin-top:0" id="lookupTitle">奖励兑现查询</h3>
+    <h3 class="cardTitle" id="lookupTitle">奖励兑现查询</h3>
     <div class="lookupBox">
       <input id="nameLookup" list="nameOptions" type="search" placeholder="输入名称，查看对应奖励兑现情况" autocomplete="off" />
       <button class="btn" id="clearLookup" type="button">清空</button>
     </div>
-    <label class="small" style="display:flex;gap:6px;align-items:center;margin-top:10px">
-      <input id="onlyUnfulfilled" type="checkbox" style="min-height:auto"> 奖励查询时仅显示未兑现
+    <label class="small lookupToggle">
+      <input id="onlyUnfulfilled" class="compactCheckbox" type="checkbox"> 奖励查询时仅显示未兑现
     </label>
     <datalist id="nameOptions"></datalist>
     <div id="lookupResult" class="lookupResult small">输入完整或部分名称后，将显示该参与者信息。</div>
@@ -100,15 +100,15 @@
 
 <div class="modal" id="adminModal">
   <div class="panel">
-    <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+    <div class="adminModalHeader">
       <div>
-        <h2 style="margin:0">管理员后台</h2>
+        <h2 class="adminPanelTitle">管理员后台</h2>
         <div class="small">登录后可修改云端数据。</div>
       </div>
       <button class="btn" id="closeAdmin">关闭</button>
     </div>
 
-    <div id="loginBox" style="margin-top:14px">
+    <div id="loginBox" class="adminLoginBox">
       <div class="formGrid two">
         <input id="adminEmail" type="email" placeholder="管理员邮箱">
         <input id="adminPassword" type="password" placeholder="密码">
@@ -118,7 +118,7 @@
     </div>
 
     <div id="adminBox" class="hidden">
-      <div class="row" style="justify-content:space-between;margin-top:10px">
+      <div class="row adminTopBar">
         <div class="status" id="adminUser"></div>
         <button class="btn bad" id="logoutBtn">退出登录</button>
       </div>
@@ -163,7 +163,7 @@
           <button class="btn" id="reloadRewards">刷新列表</button>
         </div>
         <div class="small">勾选奖励后会写入 Supabase。若填写日期，将作为兑现日期保存。</div>
-        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>用户 / 场次 / 奖励</th><th>操作</th></tr></thead><tbody id="rewardAdminBody"></tbody></table></div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>用户 / 场次 / 奖励</th><th>操作</th></tr></thead><tbody id="rewardAdminBody"></tbody></table></div>
       </div>
 
       <div class="adminSection" id="rewardProgressAdmin">
@@ -180,12 +180,12 @@
           </select>
           <input id="rewardProgressNote" placeholder="进度说明，可空">
         </div>
-        <div class="row" style="margin-top:8px">
+        <div class="row adminActionRow">
           <button class="btn good" id="saveRewardProgressBtn" type="button">保存进度</button>
           <button class="btn" id="reloadRewardProgressBtn" type="button">刷新进度</button>
         </div>
         <div class="status" id="rewardProgressStatusText"></div>
-        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>奖励</th><th>当前进度</th><th>说明</th></tr></thead><tbody id="rewardProgressBody"></tbody></table></div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th>奖励</th><th>当前进度</th><th>说明</th></tr></thead><tbody id="rewardProgressBody"></tbody></table></div>
       </div>
 
       <div class="adminSection" id="eventAdmin">
@@ -241,7 +241,7 @@
           <button class="btn" id="addRuleRowBtn" type="button">新增一档奖励</button>
         </div>
         <div id="ruleRowsBox" class="ruleRowsBox"></div>
-        <div class="row" style="margin-top:10px">
+        <div class="row adminActionRowLg">
           <button class="btn good" id="importRuleBtn" type="button">统一提交奖励规则</button>
           <button class="btn" id="resetRuleRowsBtn" type="button">清空重填</button>
         </div>
@@ -273,11 +273,11 @@
           <button class="btn good" id="addSpecialRankBtn">保存特殊奖励</button>
         </div>
         <input id="specialEditId" type="hidden" />
-        <div class="row" style="margin-top:8px">
+        <div class="row adminActionRow">
           <button class="btn" id="cancelSpecialEditBtn" type="button" style="display:none">取消编辑</button>
         </div>
         <div class="status" id="specialRankStatus"></div>
-        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>特殊奖励</th><th>操作</th></tr></thead><tbody id="specialRankBody"></tbody></table></div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>特殊奖励</th><th>操作</th></tr></thead><tbody id="specialRankBody"></tbody></table></div>
       </div>
 
       <div class="adminSection" id="unfulfilledAdmin">
@@ -288,12 +288,12 @@
           <select id="unfulfilledRewardSelect"></select>
           <button class="btn" id="refreshUnfulfilledBtn" type="button">刷新名单</button>
         </div>
-        <div class="row" style="margin:10px 0">
+        <div class="row adminControlRow">
           <span class="pill" id="unfulfilledCountPill">未兑现 0 人</span>
           <button class="btn" id="copyUnfulfilledBtn" type="button">复制名单</button>
           <button class="btn good" id="downloadUnfulfilledBtn" type="button">导出CSV</button>
         </div>
-        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>排名/类型</th><th>用户 / 奖励</th><th>状态</th></tr></thead><tbody id="unfulfilledBody"></tbody></table></div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th>排名/类型</th><th>用户 / 奖励</th><th>状态</th></tr></thead><tbody id="unfulfilledBody"></tbody></table></div>
       </div>
 
       <div class="adminSection" id="aliasAdmin">
@@ -329,16 +329,16 @@
             <option value="visible">显示</option>
             <option value="hidden">隐藏</option>
           </select>
-          <label class="small inlineCheck"><input id="announcementPinned" type="checkbox" style="min-height:auto"> 置顶公告</label>
+          <label class="small inlineCheck"><input id="announcementPinned" class="compactCheckbox" type="checkbox"> 置顶公告</label>
           <button class="btn good" id="saveAnnouncementBtn" type="button">保存公告</button>
         </div>
         <input id="announcementEditId" type="hidden">
-        <div class="row" style="margin-top:8px">
+        <div class="row adminActionRow">
           <button class="btn" id="cancelAnnouncementEditBtn" type="button" style="display:none">取消编辑</button>
           <button class="btn" id="reloadAnnouncementsBtn" type="button">刷新公告</button>
         </div>
         <div class="status" id="announcementAdminStatus"></div>
-        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>公告内容</th><th>操作</th></tr></thead><tbody id="announcementAdminBody"></tbody></table></div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>公告内容</th><th>操作</th></tr></thead><tbody id="announcementAdminBody"></tbody></table></div>
       </div>
 
       <div class="adminSection" id="lotteryAdmin">
@@ -358,7 +358,7 @@
           <input id="lotteryWinnerCount" type="number" min="1" step="1" placeholder="抽取人数，例如 1">
           <input id="lotteryPrizeText" placeholder="奖品/备注，可空">
         </div>
-        <div class="row" style="margin-top:8px">
+        <div class="row adminActionRow">
           <button class="btn" id="buildLotteryPoolBtn" type="button">生成奖池</button>
           <button class="btn good" id="drawLotteryBtn" type="button">确认抽选</button>
         </div>
@@ -380,37 +380,37 @@
           <textarea id="lotteryWinnersJson" placeholder='获奖结果 JSON，例如 [{"name":"名字A","prize":"奖品"}]'></textarea>
         </details>
         <input id="lotteryEditId" type="hidden">
-        <div class="row" style="margin-top:8px">
+        <div class="row adminActionRow">
           <button class="btn good" id="saveLotteryBtn" type="button">保存手动记录</button>
           <button class="btn" id="cancelLotteryEditBtn" type="button" style="display:none">取消编辑</button>
           <button class="btn" id="reloadLotteryBtn" type="button">刷新抽奖</button>
         </div>
         <div class="status" id="lotteryAdminStatus"></div>
         <div class="adminSubhead">抽奖记录</div>
-        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>抽奖内容</th><th>操作</th></tr></thead><tbody id="lotteryAdminBody"></tbody></table></div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>抽奖内容</th><th>操作</th></tr></thead><tbody id="lotteryAdminBody"></tbody></table></div>
       </div>
 
       <div class="adminSection" id="operationLogAdmin">
         <h3>操作日志</h3>
         <div class="small">显示管理员近期导入、抽奖、公告和奖励操作记录。</div>
-        <div class="row" style="margin-top:8px">
+        <div class="row adminActionRow">
           <button class="btn" id="reloadOperationLogsBtn" type="button">刷新日志</button>
         </div>
         <div class="status" id="operationLogStatus"></div>
-        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>时间</th><th>操作</th><th>详情</th></tr></thead><tbody id="operationLogBody"></tbody></table></div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th>时间</th><th>操作</th><th>详情</th></tr></thead><tbody id="operationLogBody"></tbody></table></div>
       </div>
 
       <div class="adminSection" id="questionAdmin">
         <h3>提问回复</h3>
         <div class="small">查看匿名提问并回复。回复后，用户可凭查询码查看回答。</div>
-        <div class="row" style="margin-top:8px">
+        <div class="row adminActionRow">
           <button class="btn active questionFilterBtn" data-question-filter="pending" type="button">待回复</button>
           <button class="btn questionFilterBtn" data-question-filter="all" type="button">全部</button>
           <button class="btn questionFilterBtn" data-question-filter="answered" type="button">已回复</button>
           <button class="btn" id="reloadQuestionsBtn" type="button">刷新提问</button>
         </div>
         <div class="status" id="questionAdminStatus"></div>
-        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>提问内容</th><th>回复</th></tr></thead><tbody id="questionAdminBody"></tbody></table></div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>提问内容</th><th>回复</th></tr></thead><tbody id="questionAdminBody"></tbody></table></div>
       </div>
     </div>
   </div>

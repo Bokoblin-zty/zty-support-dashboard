@@ -28,6 +28,7 @@ input[type="search"],#search{flex:1;min-width:180px}
 .lotteryTable td:first-child .pill{margin:0 auto}
 .status{font-size:13px;color:var(--muted);line-height:1.5}
 .hidden{display:none!important}
+.compactCheckbox{min-height:auto}
 .navRow .btn{width:100%;font-weight:800}
 .eventFilter.hidden{display:none}
 .pkSubNav:not(.hidden){
