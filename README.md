@@ -20,6 +20,10 @@ database/
   schema.sql
   policies.sql
   functions.sql
+  questions.sql
+  reward_progress.sql
+  reward_choices.sql
+  visit_logs.sql
   README.md
 docs/
   release-flow.md
@@ -27,8 +31,6 @@ docs/
 CHANGELOG.md
 RELEASE_CHECKLIST.md
 version.json
-questions.sql
-reward_progress.sql
 ```
 
 ## Frontend
@@ -49,8 +51,10 @@ Run order for a new Supabase project:
 
 Standalone compatibility files are also kept:
 
-- `questions.sql`
-- `reward_progress.sql`
+- `database/questions.sql`
+- `database/reward_progress.sql`
+- `database/reward_choices.sql`
+- `database/visit_logs.sql`
 
 ## Release Check
 

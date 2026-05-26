@@ -19,8 +19,10 @@ This project is a static Netlify site backed by Supabase. The current structure 
 
 ## Database References
 
-- `questions.sql`: anonymous question system setup.
-- `reward_progress.sql`: reward production progress setup.
+- `database/questions.sql`: anonymous question system setup.
+- `database/reward_choices.sql`: selectable reward options and user choices.
+- `database/visit_logs.sql`: anonymous visit statistics setup.
+- `database/reward_progress.sql`: reward production progress setup.
 - `database/schema.sql`: consolidated table definitions.
 - `database/policies.sql`: consolidated RLS policy reference.
 - `database/functions.sql`: consolidated SQL functions.

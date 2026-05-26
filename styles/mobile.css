@@ -487,18 +487,36 @@
     width:100%;
     max-height:none;
     min-height:calc(100vh - 20px);
-    padding:14px;
+    padding:0;
     border-radius:18px;
   }
+  .adminModalHeader{
+    padding:14px;
+  }
+  .adminTopBar{
+    padding:10px 14px;
+  }
+  .adminShell{
+    grid-template-columns:1fr;
+    min-height:auto;
+  }
   .tabs{
+    flex-direction:row;
+    flex-wrap:wrap;
     gap:7px;
     padding:9px;
     border-radius:16px;
+    margin:10px;
+    border-right:0;
   }
   .tab{
+    width:auto;
     min-height:40px;
     padding:9px 10px;
     border-radius:999px;
+  }
+  .adminWorkspace{
+    padding:10px;
   }
   .adminGroupLabel{
     flex-basis:100%;
@@ -526,6 +544,9 @@
   }
   .adminOverviewGrid{
     grid-template-columns:1fr 1fr;
+  }
+  .adminTaskGrid{
+    grid-template-columns:1fr;
   }
   .adminLogItem{
     grid-template-columns:1fr;

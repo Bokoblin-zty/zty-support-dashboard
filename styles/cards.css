@@ -8,6 +8,9 @@
 .lookupBox{display:flex;gap:8px;align-items:center}
 .lookupBox input{flex:1;min-width:0}
 .lookupResult{margin-top:12px}
+.matchPillRow{margin-bottom:10px}
+.clickablePill{cursor:pointer}
+.lookupNote{margin:2px 0 8px}
 .lookupToggle{display:flex;gap:6px;align-items:center;margin-top:10px}
 .lookupSummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
 .lookupMini{background:#fffaf0;border:1px solid var(--line);border-radius:14px;padding:10px}

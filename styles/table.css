@@ -1,4 +1,31 @@
 /* Tables, reward lists, announcements, lottery, questions */
+.table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+.table th,
+.table td{
+  padding:11px 10px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+  vertical-align:top;
+}
+.table th{
+  color:var(--muted);
+  font-weight:700;
+}
+.table td:last-child,
+.table th:last-child{
+  text-align:right;
+}
+.tableTitle{
+  font-size:18px;
+  margin-bottom:12px !important;
+}
+.table tr.rank-1,.table tr.rank-2,.table tr.rank-3{
+  background:linear-gradient(90deg,rgba(255,255,255,.96),rgba(255,250,240,.98));
+}
 details.rewardDetails{border:1px solid var(--line);border-radius:14px;background:#fff;margin:8px 0;overflow:hidden}
 details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;justify-content:space-between;gap:10px;align-items:center;font-weight:800}
 .rewardDetailHint{display:block;color:#9a6a16;margin-top:3px;font-weight:700}

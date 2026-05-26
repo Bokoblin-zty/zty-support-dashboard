@@ -5,12 +5,26 @@ const SUPABASE_URL = "https://nmjjgqlcwiqbvpjkyink.supabase.co";
 const SUPABASE_KEY = "sb_publishable_lcaNfMEmLYmIk3Yhlu7Rzw_WfF5qtgX";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const SITE_ACCESS_STORAGE_KEY = "zty_support_access_granted";
+const VISITOR_ID_STORAGE_KEY = "zty_support_visitor_id";
+const VISIT_LOG_DEDUPE_PREFIX = "zty_support_visit_";
+const VISIT_LOG_DEDUPE_MS = 5 * 60 * 1000;
 const DEFAULT_SITE_ACCESS_PASSWORD_HASH = "116070d3ce1fe6fcbf1a3147511bc32442b455a08e571814a490499a09371b5f";
 const DEFAULT_SITE_ACCESS_TTL_DAYS = 7;
 const SITE_SETTINGS_KEYS = ['access_password_hash','access_password','access_ttl_days'];
+const VISIT_VIEW_LABELS = {
+  overview:'数据总览',
+  personal:'总数据排名',
+  participant:'总选排名',
+  event:'总选单场',
+  birth:'生公排名',
+  lookup:'奖励查询',
+  announcements:'公告通知',
+  lottery:'抽奖结果',
+  questions:'匿名提问'
+};
 
-let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[] };
-let state = { view:'overview', event:'', user:null, questionFilter:'pending', rewardProgressAvailable:true };
+let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[] };
+let state = { view:'overview', event:'', user:null, questionFilter:'pending', rewardProgressAvailable:true, rewardChoicesAvailable:true, visitLogsAvailable:true };
 let siteSettings = { access_password_hash: DEFAULT_SITE_ACCESS_PASSWORD_HASH, access_ttl_days: DEFAULT_SITE_ACCESS_TTL_DAYS, available:false };
 let pendingPkExcelRows = [];
 let pendingBirthExcelRows = [];
@@ -93,7 +107,7 @@ const escapeHtml = s => String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'
 ========================= */
 async function loadAll(){
   // 一次性读取页面所需数据，并在进入渲染前完成名称统一和数字格式整理。
-  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards, announcements, lotteryRecords, rewardProgress] = await Promise.all([
+  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards, announcements, lotteryRecords, rewardProgress, rewardChoiceOptions, rewardChoices] = await Promise.all([
     sb.from('pk_events').select('*').order('sort_order',{ascending:true}),
     sb.from('pk_records').select('*'),
     sb.from('birth_fund_records').select('*'),
@@ -105,25 +119,32 @@ async function loadAll(){
     sb.from('special_rank_rewards').select('*').order('created_at',{ascending:false}),
     sb.from('announcements').select('*').order('created_at',{ascending:false}),
     sb.from('lottery_records').select('*').order('created_at',{ascending:false}),
-    sb.from('reward_progress').select('*').order('reward_name',{ascending:true})
+    sb.from('reward_progress').select('*').order('reward_name',{ascending:true}),
+    sb.from('reward_choice_options').select('*').order('reward_name',{ascending:true}),
+    sb.from('reward_choices').select('*')
   ]);
   for(const res of [events,records,birth,status,aliases,rewardRules,birthRewardRules,birthRewardStatus,specialRankRewards,announcements,lotteryRecords]){
     if(res.error){ alert('读取数据失败：'+res.error.message); console.error(res.error); }
   }
   state.rewardProgressAvailable = !rewardProgress.error;
   if(rewardProgress.error) console.warn('reward_progress unavailable:', rewardProgress.error);
+  state.rewardChoicesAvailable = !rewardChoiceOptions.error && !rewardChoices.error;
+  if(rewardChoiceOptions.error) console.warn('reward_choice_options unavailable:', rewardChoiceOptions.error);
+  if(rewardChoices.error) console.warn('reward_choices unavailable:', rewardChoices.error);
   DATA.aliases = aliases.data || [];
   const rawRecords = records.data || [];
   const rawBirthRecords = birth.data || [];
   const rawRewardStatus = status.data || [];
   const rawBirthRewardStatus = birthRewardStatus.data || [];
   const rawSpecialRankRewards = specialRankRewards.data || [];
+  const rawRewardChoices = rewardChoices.error ? [] : (rewardChoices.data || []);
   DATA.autoNames = buildAutoNameMap([
     ...rawRecords.map(r=>r.user_name),
     ...rawBirthRecords.map(r=>r.user_name),
     ...rawRewardStatus.map(r=>r.user_name),
     ...rawBirthRewardStatus.map(r=>r.user_name),
     ...rawSpecialRankRewards.map(r=>r.winner_name),
+    ...rawRewardChoices.map(r=>r.user_name),
     ...DATA.aliases.map(a=>a.alias_name),
     ...DATA.aliases.map(a=>a.canonical_name)
   ]);
@@ -154,6 +175,8 @@ async function loadAll(){
   DATA.announcements = announcements.data || [];
   DATA.lotteryRecords = lotteryRecords.data || [];
   DATA.rewardProgress = rewardProgress.error ? [] : (rewardProgress.data || []);
+  DATA.rewardChoiceOptions = rewardChoiceOptions.error ? [] : (rewardChoiceOptions.data || []);
+  DATA.rewardChoices = rawRewardChoices.map(r=>({...r,user_name:canon(r.user_name)}));
   DATA.specialRankRewards = rawSpecialRankRewards.map(r=>({
     ...r,
     target_rank: num(r.target_rank),
@@ -164,7 +187,7 @@ async function loadAll(){
   initControls();
   setActive(state.view);
   renderAll();
-  if(state.user){ renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); }
+  if(state.user){ renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); }
 }
 
 /* =========================
@@ -291,10 +314,86 @@ function allEarnedRewards(){
   for(const r of aggregateByEventUser(DATA.records)){
     const items = rewardItemsFor(r.user_name, r.event_name, r.amount);
     for(const item of items){
-      out.push({user_name:r.user_name,event_name:r.event_name,amount:r.amount,reward_name:item.reward,fulfilled:item.fulfilled,fulfilled_date:item.date});
+      out.push({source_type:'pk',user_name:r.user_name,event_name:r.event_name,amount:r.amount,reward_name:item.reward,fulfilled:item.fulfilled,fulfilled_date:item.date});
     }
   }
   return out;
+}
+function allEarnedBirthRewards(){
+  const out=[];
+  for(const r of aggregateByUser(DATA.birthRecords)){
+    const items = birthRewardItemsFor(r.name, r.total);
+    for(const item of items){
+      out.push({
+        source_type:'birth',
+        user_name:r.name,
+        event_name:item.group || '生公',
+        amount:r.total,
+        reward_name:item.reward,
+        fulfilled:item.fulfilled,
+        fulfilled_date:item.date,
+        reward_group:item.group || '生公'
+      });
+    }
+  }
+  return out;
+}
+function sourceTypeText(type){
+  return {pk:'总选',birth:'生公',special:'特殊'}[type] || type || '其他';
+}
+function rewardChoiceKey(sourceType,eventName,rewardName,userName=''){
+  return [userName ? canon(userName) : '', sourceType || '', eventName || '', rewardName || ''].join('||');
+}
+function choiceOptionsArray(row){
+  const raw=row?.choice_options;
+  if(Array.isArray(raw)) return raw.map(x=>String(x||'').trim()).filter(Boolean);
+  if(typeof raw === 'string'){
+    try{
+      const parsed=JSON.parse(raw);
+      if(Array.isArray(parsed)) return parsed.map(x=>String(x||'').trim()).filter(Boolean);
+    }catch(_err){}
+  }
+  return [];
+}
+function choiceOptionFor(sourceType,eventName,rewardName){
+  const rows=DATA.rewardChoiceOptions || [];
+  return rows.find(r=>r.source_type===sourceType && (r.event_name||'')===(eventName||'') && r.reward_name===rewardName)
+    || rows.find(r=>r.source_type===sourceType && !(r.event_name||'') && r.reward_name===rewardName)
+    || null;
+}
+function choiceForUser(userName,sourceType,eventName,rewardName){
+  const u=canon(userName);
+  return (DATA.rewardChoices || []).find(r=>canon(r.user_name)===u && r.source_type===sourceType && (r.event_name||'')===(eventName||'') && r.reward_name===rewardName) || null;
+}
+function rewardChoiceInfo(userName,sourceType,eventName,rewardName){
+  const option=choiceOptionFor(sourceType,eventName,rewardName);
+  if(!option || option.is_choice_required === false) return null;
+  const options=choiceOptionsArray(option);
+  if(!options.length) return null;
+  const choice=choiceForUser(userName,sourceType,eventName,rewardName);
+  const selected=String(choice?.selected_choice || '').trim();
+  return {
+    option,
+    options,
+    choice,
+    selected,
+    status:selected ? 'selected' : 'pending'
+  };
+}
+function renderRewardChoiceLine(userName,sourceType,eventName,rewardName){
+  const info=rewardChoiceInfo(userName,sourceType,eventName,rewardName);
+  if(!info) return renderRewardProgressLine(rewardName);
+  if(!info.selected){
+    return `<div class="small rewardProgressLine">选择状态：<span class="pill warn">待选择</span></div><div class="small rewardProgressLine">制作进度：<span class="pill warn">待选择</span></div>`;
+  }
+  return `<div class="small rewardProgressLine">已选择：<span class="pill good">${escapeHtml(info.selected)}</span></div>${renderRewardProgressLine(info.selected)}`;
+}
+function allChoiceRewardRows(){
+  const rows=[...allEarnedRewards(), ...allEarnedBirthRewards()];
+  return rows.map(r=>{
+    const info=rewardChoiceInfo(r.user_name,r.source_type,r.event_name,r.reward_name);
+    return {...r, choiceInfo:info};
+  }).filter(r=>r.choiceInfo);
 }
 function progressForReward(rewardName){
   const name=String(rewardName||'').trim();
@@ -324,6 +423,13 @@ function rewardOptionMap(){
   DATA.rewardRules.forEach(r=>add(r.reward_name,'总选奖励'));
   DATA.birthRewardRules.forEach(r=>add(r.reward_name,'生公奖励'));
   DATA.specialRankRewards.forEach(r=>add(r.reward_name,'特殊排名奖励'));
+  DATA.rewardChoiceOptions.forEach(r=>{
+    add(r.reward_name,`${sourceTypeText(r.source_type)}可选奖励`);
+    choiceOptionsArray(r).forEach(option=>add(option,`${sourceTypeText(r.source_type)}具体选项`));
+  });
+  DATA.rewardChoices.forEach(r=>{
+    if(r.selected_choice) add(r.selected_choice,`${sourceTypeText(r.source_type)}具体选项`);
+  });
   DATA.rewardProgress.forEach(r=>add(r.reward_name,r.reward_type || '其他'));
   return map;
 }
@@ -440,6 +546,41 @@ function formatDateTime(value){
   if(Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString('zh-CN',{hour12:false});
 }
+function visitViewLabel(view){
+  return VISIT_VIEW_LABELS[view] || view || '页面访问';
+}
+function getVisitorId(){
+  let id=localStorage.getItem(VISITOR_ID_STORAGE_KEY);
+  if(!id){
+    id=`v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,10)}`;
+    localStorage.setItem(VISITOR_ID_STORAGE_KEY,id);
+  }
+  return id;
+}
+function currentDeviceType(){
+  return window.matchMedia('(max-width: 900px)').matches ? 'mobile' : 'desktop';
+}
+async function recordVisit(viewName){
+  if(document.body.classList.contains('accessLocked')) return;
+  const view=viewName || state.view || 'overview';
+  const dedupeKey=VISIT_LOG_DEDUPE_PREFIX + view;
+  const now=Date.now();
+  const last=Number(sessionStorage.getItem(dedupeKey) || 0);
+  if(now - last < VISIT_LOG_DEDUPE_MS) return;
+  sessionStorage.setItem(dedupeKey,String(now));
+  try{
+    const res=await sb.from('visit_logs').insert({
+      visitor_id:getVisitorId(),
+      view_name:view,
+      device_type:currentDeviceType(),
+      user_agent:navigator.userAgent,
+      page_path:location.pathname || 'index.html'
+    });
+    if(res.error) state.visitLogsAvailable=false;
+  }catch(e){
+    state.visitLogsAvailable=false;
+  }
+}
 function lotteryTypeLabel(type){
   return {
     monthly:'月份抽奖',
@@ -536,6 +677,8 @@ function operationActionLabel(action){
     delete_special_rank_reward:'删除特殊排名奖励',
     upsert_name_alias:'保存名称别名',
     update_reward_progress:'更新制作进度',
+    upsert_reward_choice_options:'保存奖励选项',
+    update_reward_choice:'更新奖励选择',
     answer_question:'回复匿名提问'
   }[action] || action || '-';
 }
@@ -713,6 +856,7 @@ function setActive(v){
 
   const eventBox=document.getElementById('eventFilterBox');
   if(eventBox) eventBox.classList.toggle('hidden', v!=='event');
+  recordVisit(v);
 }
 document.querySelectorAll('.btn[data-main-view]').forEach(b=>b.onclick=()=>{const mv=b.dataset.mainView;state.view=mv==='pk'?'personal':mv;setActive(state.view);renderAll();});
 document.querySelectorAll('.btn[data-view]').forEach(b=>b.onclick=()=>{
@@ -814,7 +958,7 @@ function renderTable(){
     `;
     return;
   }else if(state.view==='participant'){
-    title.textContent='总选🍊排名';
+    title.textContent='总选排名';
     thead.innerHTML='<tr class="noteRow"><td colspan="3" class="small">票数按 33.5 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>总选金额</th></tr>';
     rows=aggregateByUser(DATA.records).map((p,i)=>({rank:i+1,name:p.name,value:p.total,votes:p.total/33.5,showVotes:true,search:p.name}));
   }else if(state.view==='event'){
@@ -824,7 +968,7 @@ function renderTable(){
     rows=aggregateByEventUser(DATA.records,event)
       .map((r,i)=>({rank:i+1,name:r.user_name,value:num(r.amount),votes:num(r.amount)/33.5,showVotes:true,search:`${r.user_name} ${r.event_name}`}));
   }else if(state.view==='birth'){
-    title.textContent='生公🍊排名';
+    title.textContent='生公排名';
     thead.innerHTML='<tr><th>排名</th><th>名称</th><th>生公金额</th></tr>';
     rows=birthByUser().map((p,i)=>({rank:i+1,name:p.name,value:p.total,search:p.name}));
   }else if(state.view==='personal'){
@@ -927,7 +1071,7 @@ function renderPersonalSearch(){
 
   const name=matches[0];
   const candidates = matches.length>1
-    ? `<div class="small" style="margin-bottom:10px">匹配结果：${matches.map(n=>`<span class="pill personal-candidate-pill" data-name="${escapeHtml(n)}" style="cursor:pointer">${escapeHtml(n)}</span>`).join('')}</div>`
+    ? `<div class="small matchPillRow">匹配结果：${matches.map(n=>`<span class="pill personal-candidate-pill clickablePill" data-name="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}</div>`
     : '';
 
   const pkRows=pkEvents().map(e=>({
@@ -953,7 +1097,7 @@ function renderPersonalSearch(){
       <div class="lookupMini"><span class="small">生公金额</span><b>${fmt(bTotal)}</b></div>
       <div class="lookupMini"><span class="small">最高单场</span><b>${escapeHtml(best.name)} ${fmt(best.amount)}</b></div>
     </div>
-    <div class="small" style="margin:2px 0 8px">🍊合计仅供个人查询参考；总选排名只计算总选金额，生公不计入总选排名。</div>
+    <div class="small lookupNote">🍊合计仅供个人查询参考；总选排名只计算总选金额，生公不计入总选排名。</div>
     <div class="eventAmountList">
       ${pkRows.map(r=>`<div class="eventAmountItem"><div><b>${escapeHtml(r.name)}</b><div class="small">${escapeHtml(r.date||'')}</div></div><div class="amt">${fmt(r.amount)}</div></div>`).join('')}
       <div class="eventAmountItem"><div><b>生公专项</b><div class="small">独立统计，不计入总选</div></div><div class="amt">${fmt(bTotal)}</div></div>
@@ -981,7 +1125,7 @@ function renderLookup(){
   const matches=allNames().filter(n=>n.toLowerCase().includes(kw) || (kwKey && nameKey(n).includes(kwKey)));
   if(!matches.length){out.className='lookupResult small'; out.innerHTML='未找到匹配名称。'; return;}
   const name=matches[0];
-  const candidates = matches.length>1 ? `<div class="small" style="margin-bottom:10px">匹配结果：${matches.map(n=>`<span class="pill candidate-pill" data-name="${escapeHtml(n)}" style="cursor:pointer">${escapeHtml(n)}</span>`).join('')}</div>` : '';
+  const candidates = matches.length>1 ? `<div class="small matchPillRow">匹配结果：${matches.map(n=>`<span class="pill candidate-pill clickablePill" data-name="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}</div>` : '';
   if(state.view==='rewards'){
     renderRewardLookup(name,candidates,out);
   }else{
@@ -1001,7 +1145,7 @@ function renderPersonalLookup(name,candidates,out){
       <div class="lookupMini"><span class="small">总选金额</span><b>${fmt(pkTotal)}</b></div>
       <div class="lookupMini"><span class="small">生公金额</span><b>${fmt(bTotal)}</b></div>
     </div>
-    <div class="small" style="margin:2px 0 8px">个人🍊合计：${fmt(pkTotal+bTotal)}。该合计仅供个人查询参考，不参与总选排名。</div>
+    <div class="small lookupNote">个人🍊合计：${fmt(pkTotal+bTotal)}。该合计仅供个人查询参考，不参与总选排名。</div>
     <div class="eventAmountList">
       ${pkRows.map(r=>`<div class="eventAmountItem"><div><b>${escapeHtml(r.name)}</b><div class="small">${escapeHtml(r.date||'')}</div></div><div class="amt">${fmt(r.amount)}</div></div>`).join('')}
       <div class="eventAmountItem"><div><b>生公专项</b><div class="small">独立统计，不计入总选</div></div><div class="amt">${fmt(bTotal)}</div></div>
@@ -1031,19 +1175,19 @@ function renderRewardLookup(name,candidates,out){
     ${rewardSection('总选奖励', rows.map(r=>`<details class="rewardDetails">
       <summary><span>${escapeHtml(r.event)} <span class="small">${escapeHtml(r.date||'')}</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(r.amount)}</span></summary>
       <div class="rewardList">
-        ${r.rewards.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}</div>${renderRewardProgressLine(x.reward)}</div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
+        ${r.rewards.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}</div>${renderRewardChoiceLine(name,'pk',r.event,x.reward)}</div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
       </div>
     </details>`).join('') || '<div class="emptyState"><b>暂无总选奖励</b><div class="small">当前名称暂无符合条件的总选金额门槛奖励。</div></div>', only?'仅显示未兑现':'按单场总选金额计算')}
-    ${rewardSection('生公奖励', renderBirthRewardGroups(birthRewards,birthAmount), `生公合计 ${fmt(birthAmount)}`)}
+    ${rewardSection('生公奖励', renderBirthRewardGroups(name,birthRewards,birthAmount), `生公合计 ${fmt(birthAmount)}`)}
     ${rewardSection('特殊排名奖励', renderSpecialRankRewardsForUser(name) || '<div class="emptyState"><b>暂无特殊排名奖励</b><div class="small">后台记录后会显示在这里。</div></div>', `${specialCount} 项`)}
-    <div class="hint">总选奖励按单场总选金额判断；生公奖励按生公🍊合计判断，其中生日留言册只显示最高达标档。特殊排名奖励由提供者独立提供，按后台记录显示。</div>`;
+    <div class="hint">总选奖励按单场总选金额判断；生公奖励按生公合计判断，其中生日留言册只显示最高达标档。特殊排名奖励由提供者独立提供，按后台记录显示。</div>`;
 }
 
-function renderBirthRewardGroups(items,birthAmount){
+function renderBirthRewardGroups(name,items,birthAmount){
   const groups = [...new Set(items.map(x=>x.group))];
   if(!groups.length){
     return `<details class="rewardDetails">
-      <summary><span>生公奖励 <span class="small">生公🍊合计</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
+      <summary><span>生公奖励 <span class="small">生公合计</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
       <div class="rewardList"><div class="small">暂无符合条件的生公奖励。</div></div>
     </details>`;
   }
@@ -1051,9 +1195,9 @@ function renderBirthRewardGroups(items,birthAmount){
     const groupItems = items.filter(x=>x.group===group);
     const groupRuleHint = groupItems.some(x=>x.highestOnly) ? '仅显示最高达标档' : '各档兼得';
     return `<details class="rewardDetails">
-      <summary><span>生公奖励 · ${escapeHtml(group)} <span class="small">生公🍊合计 ｜ ${escapeHtml(groupRuleHint)}</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
+      <summary><span>生公奖励 · ${escapeHtml(group)} <span class="small">生公合计 ｜ ${escapeHtml(groupRuleHint)}</span><span class="small rewardDetailHint">点击查看详情</span></span><span>${fmt(birthAmount)}</span></summary>
       <div class="rewardList">
-        ${groupItems.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}${x.note?' ｜ '+escapeHtml(x.note):''}</div>${renderRewardProgressLine(x.reward)}</div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
+        ${groupItems.map(x=>`<div class="rewardItem"><div><b>${escapeHtml(x.reward)}</b><div class="small">达标金额：${fmt(x.min)}${x.note?' ｜ '+escapeHtml(x.note):''}</div>${renderRewardChoiceLine(name,'birth',x.group || '生公',x.reward)}</div><div>${x.fulfilled?`<span class="pill good">已兑现${x.date?' '+escapeHtml(x.date):''}</span>`:`<span class="pill warn">未兑现</span>`}</div></div>`).join('')}
       </div>
     </details>`;
   }).join('');
@@ -1118,7 +1262,7 @@ async function openAdmin(){
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   updateAuthUI();
-  if(user){ renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderSiteSettingsAdmin(); }
+  if(user){ renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderSiteSettingsAdmin(); }
 }
 function updateAuthUI(){
   document.getElementById('loginBox').classList.toggle('hidden',!!state.user);
@@ -1141,22 +1285,29 @@ document.getElementById('loginBtn').onclick=async()=>{
   const password=document.getElementById('adminPassword').value;
   const res=await sb.auth.signInWithPassword({email,password});
   if(res.error){document.getElementById('loginStatus').textContent='登录失败：'+res.error.message;return;}
-  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderSiteSettingsAdmin();
+  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderSiteSettingsAdmin();
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+function setAdminTab(tabId){
+  const tab=document.querySelector(`.tab[data-admin-tab="${tabId}"]`);
+  const section=document.getElementById(tabId);
+  if(!tab || !section) return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.adminSection').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active'); document.getElementById(t.dataset.adminTab).classList.add('active');
-  if(t.dataset.adminTab==='announcementAdmin') renderAnnouncementAdmin();
-  if(t.dataset.adminTab==='lotteryAdmin') renderLotteryAdmin();
-  if(t.dataset.adminTab==='questionAdmin') renderQuestionAdmin();
-  if(t.dataset.adminTab==='operationLogAdmin') renderOperationLogs();
-  if(t.dataset.adminTab==='siteSettingsAdmin') renderSiteSettingsAdmin();
-  if(t.dataset.adminTab==='rewardProgressAdmin') renderRewardProgressAdmin();
-  if(t.dataset.adminTab==='adminOverview') renderAdminOverview();
-});
+  tab.classList.add('active');
+  section.classList.add('active');
+  if(tabId==='announcementAdmin') renderAnnouncementAdmin();
+  if(tabId==='lotteryAdmin') renderLotteryAdmin();
+  if(tabId==='questionAdmin') renderQuestionAdmin();
+  if(tabId==='operationLogAdmin') renderOperationLogs();
+  if(tabId==='siteSettingsAdmin') renderSiteSettingsAdmin();
+  if(tabId==='visitStatsAdmin') renderVisitStatsAdmin();
+  if(tabId==='rewardProgressAdmin') renderRewardProgressAdmin();
+  if(tabId==='rewardChoiceAdmin') renderRewardChoiceAdmin();
+  if(tabId==='adminOverview') renderAdminOverview();
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setAdminTab(t.dataset.adminTab));
 
 document.getElementById('reloadRewards').onclick=()=>renderAdminRewards();
 document.getElementById('rewardSearch').oninput=()=>renderAdminRewards();
@@ -1164,11 +1315,14 @@ document.getElementById('rewardSearch').oninput=()=>renderAdminRewards();
 async function renderAdminOverview(){
   const stats=document.getElementById('adminOverviewStats');
   const logs=document.getElementById('adminOverviewLogs');
+  const tasks=document.getElementById('adminTaskGrid');
   if(!stats || !logs) return;
   const normalUnfulfilled=allEarnedRewards().filter(r=>!r.fulfilled).length;
   const specialUnfulfilled=(DATA.specialRankRewards || []).filter(r=>!r.fulfilled).length;
   const visibleAnnouncementCount=(DATA.announcements || []).filter(a=>a.is_visible !== false).length;
   const totalRewardCount=allRewardProgressOptions().length;
+  const pendingChoices=allChoiceRewardRows().filter(r=>r.choiceInfo?.status==='pending').length;
+  const activeProgress=(DATA.rewardProgress || []).filter(r=>r.progress_status && r.progress_status!=='已完结').length;
   let pendingQuestions='-';
   const questionRes=await sb.from('questions').select('answer_text').limit(1000);
   if(!questionRes.error){
@@ -1176,15 +1330,35 @@ async function renderAdminOverview(){
   }
   const cards=[
     ['总选场次', pkEvents().length, '已创建 PK 场次'],
-    ['总选记录', DATA.records.length, '总选🍊明细'],
-    ['生公记录', DATA.birthRecords.length, '生公🍊明细'],
+    ['总选记录', DATA.records.length, '总选明细'],
+    ['生公记录', DATA.birthRecords.length, '生公明细'],
     ['未兑现奖励', normalUnfulfilled + specialUnfulfilled, '普通奖励 + 特殊奖励'],
+    ['待选择奖励', pendingChoices, '二选一 / 多选一待处理'],
     ['待回复提问', pendingQuestions, '匿名提问待处理'],
     ['前台公告', visibleAnnouncementCount, `全部 ${DATA.announcements.length} 条`],
     ['抽奖记录', DATA.lotteryRecords.length, '已发布抽奖结果'],
     ['奖励品类', totalRewardCount, '制作进度可维护项']
   ];
   stats.innerHTML=cards.map(([label,value,note])=>`<div class="adminOverviewCard"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b><small>${escapeHtml(note)}</small></div>`).join('');
+  if(tasks){
+    const taskCards=[
+      ['普通未兑现', normalUnfulfilled, '检查普通奖励兑现状态', 'rewardAdmin'],
+      ['特殊未兑现', specialUnfulfilled, '检查特殊排名奖励兑现状态', 'specialRankAdmin'],
+      ['待选择奖励', pendingChoices, '为二选一或多选一奖励保存具体选择', 'rewardChoiceAdmin'],
+      ['待回复提问', pendingQuestions, '查看匿名提问并回复用户', 'questionAdmin'],
+      ['制作进度', activeProgress, '更新未完结奖励的制作状态', 'rewardProgressAdmin'],
+      ['发布公告', visibleAnnouncementCount, '新增、编辑、置顶或隐藏前台公告', 'announcementAdmin'],
+      ['抽奖管理', DATA.lotteryRecords.length, '生成奖池、确认抽选或补录抽奖记录', 'lotteryAdmin']
+    ];
+    tasks.innerHTML=taskCards.map(([label,value,note,tabId])=>`
+      <button class="adminTaskCard" type="button" data-admin-target="${escapeHtml(tabId)}">
+        <span>${escapeHtml(label)}</span>
+        <b>${escapeHtml(value)}</b>
+        <small>${escapeHtml(note)}</small>
+      </button>
+    `).join('');
+    tasks.querySelectorAll('.adminTaskCard').forEach(btn=>btn.onclick=()=>setAdminTab(btn.dataset.adminTarget));
+  }
   logs.innerHTML='<div class="small">正在读取最近操作...</div>';
   const logRes=await sb.from('operation_logs').select('*').order('created_at',{ascending:false}).limit(5);
   if(logRes.error){
@@ -1204,10 +1378,18 @@ function renderAdminRewards(){
   document.getElementById('rewardAdminBody').innerHTML=rows.map((r,i)=>`
     <tr>
       <td>${r.fulfilled?`<span class="pill good">已兑现${r.fulfilled_date?' '+escapeHtml(r.fulfilled_date):''}</span>`:`<span class="pill warn">未兑现</span>`}</td>
-      <td><b>${escapeHtml(r.user_name)}</b><div class="small">${escapeHtml(r.event_name)} ｜ ${fmt(r.amount)} ｜ ${escapeHtml(r.reward_name)}</div></td>
+      <td><b>${escapeHtml(r.user_name)}</b><div class="small">${escapeHtml(r.event_name)} ｜ ${fmt(r.amount)} ｜ ${escapeHtml(r.reward_name)}</div>${renderAdminChoiceSummary(r)}</td>
       <td><button class="btn ${r.fulfilled?'bad':'good'} reward-toggle" data-i="${i}">${r.fulfilled?'标为未兑现':'标为已兑现'}</button></td>
     </tr>`).join('') || '<tr><td colspan="3" class="small">暂无奖励数据</td></tr>';
   document.querySelectorAll('.reward-toggle').forEach(btn=>btn.onclick=()=>toggleReward(rows[+btn.dataset.i]));
+}
+
+function renderAdminChoiceSummary(row){
+  const info=rewardChoiceInfo(row.user_name,row.source_type,row.event_name,row.reward_name);
+  if(!info) return '';
+  return info.selected
+    ? `<div class="small">奖励选择：<span class="pill good">${escapeHtml(info.selected)}</span></div>`
+    : `<div class="small">奖励选择：<span class="pill warn">待选择</span></div>`;
 }
 
 async function toggleReward(r){
@@ -1216,7 +1398,10 @@ async function toggleReward(r){
   const payload={user_name:r.user_name,event_name:r.event_name,reward_name:r.reward_name,fulfilled:newVal,fulfilled_date:date};
   const res=await sb.from('reward_status').upsert(payload,{onConflict:'user_name,event_name,reward_name'});
   if(res.error){alert('保存失败：'+res.error.message);return;}
-  if(newVal) await syncRewardProgressCompleted(r.reward_name,'总选奖励');
+  if(newVal){
+    const choice=choiceForUser(r.user_name,r.source_type,r.event_name,r.reward_name);
+    await syncRewardProgressCompleted(choice?.selected_choice || r.reward_name,'总选奖励');
+  }
   await logOperation('update_reward_status', `${r.user_name}｜${r.event_name}｜${r.reward_name}`, payload);
   await loadAll();
 }
@@ -1264,6 +1449,120 @@ async function saveRewardProgress(){
   }
   status.textContent='保存成功';
   await logOperation('update_reward_progress', `${reward_name}｜${progress_status}`, payload);
+  await loadAll();
+}
+
+function allRewardChoiceTargets(){
+  const map=new Map();
+  const add=(source_type,event_name,reward_name,detail='')=>{
+    const reward=String(reward_name||'').trim();
+    if(!reward) return;
+    const event=String(event_name||'').trim();
+    const key=rewardChoiceKey(source_type,event,reward);
+    if(!map.has(key)){
+      map.set(key,{source_type,event_name:event,reward_name:reward,detail});
+    }
+  };
+  DATA.rewardRules.forEach(r=>add('pk',r.event_name,r.reward_name,r.event_name));
+  DATA.birthRewardRules.forEach(r=>add('birth',r.reward_group || '生公',r.reward_name,r.reward_group || '生公'));
+  DATA.specialRankRewards.forEach(r=>add('special',r.event_name || '特殊',r.reward_name,r.event_name || '特殊排名'));
+  DATA.rewardChoiceOptions.forEach(r=>add(r.source_type,r.event_name,r.reward_name,r.note || '已配置'));
+  return [...map.values()].sort((a,b)=>`${a.reward_name}${a.event_name}`.localeCompare(`${b.reward_name}${b.event_name}`,'zh-Hans-CN'));
+}
+function targetOptionLabel(t){
+  const event=t.event_name ? `｜${t.event_name}` : '';
+  return `${t.reward_name}｜${sourceTypeText(t.source_type)}${event}`;
+}
+function parseChoiceTargetKey(key){
+  const parts=String(key||'').split('||');
+  return {source_type:parts[1] || '', event_name:parts[2] || '', reward_name:parts[3] || ''};
+}
+function renderRewardChoiceAdmin(){
+  const select=document.getElementById('choiceOptionReward');
+  const text=document.getElementById('choiceOptionText');
+  const note=document.getElementById('choiceOptionNote');
+  const body=document.getElementById('rewardChoiceBody');
+  const status=document.getElementById('rewardChoiceStatus');
+  if(!select || !body) return;
+  const targets=allRewardChoiceTargets();
+  const current=select.value;
+  select.innerHTML=targets.map(t=>`<option value="${escapeHtml(rewardChoiceKey(t.source_type,t.event_name,t.reward_name))}">${escapeHtml(targetOptionLabel(t))}</option>`).join('');
+  if(current && [...select.options].some(o=>o.value===current)) select.value=current;
+  const selectedTarget=parseChoiceTargetKey(select.value);
+  const option=choiceOptionFor(selectedTarget.source_type,selectedTarget.event_name,selectedTarget.reward_name);
+  if(text) text.value=choiceOptionsArray(option).join('\n');
+  if(note) note.value=option?.note || '';
+  if(status) status.textContent=state.rewardChoicesAvailable ? '' : '请先在 Supabase 执行 database/reward_choices.sql，创建后刷新页面即可使用。';
+
+  const filter=document.getElementById('rewardChoiceFilter')?.value || 'pending';
+  const kw=(document.getElementById('rewardChoiceSearch')?.value || '').toLowerCase().trim();
+  let rows=allChoiceRewardRows();
+  if(filter==='pending') rows=rows.filter(r=>r.choiceInfo?.status==='pending');
+  if(filter==='selected') rows=rows.filter(r=>r.choiceInfo?.status==='selected');
+  rows=rows.filter(r=>!kw || `${r.user_name} ${r.event_name} ${r.reward_name} ${r.choiceInfo?.selected || ''}`.toLowerCase().includes(kw));
+  body.innerHTML=rows.map((r,i)=>{
+    const options=r.choiceInfo.options;
+    const selected=r.choiceInfo.selected;
+    const selectOptions=['',...options.filter(x=>x!==selected)];
+    if(selected) selectOptions.unshift(selected);
+    return `<tr>
+      <td>${selected?'<span class="pill good">已选择</span>':'<span class="pill warn">待选择</span>'}<div class="small">${escapeHtml(sourceTypeText(r.source_type))}</div></td>
+      <td><b>${escapeHtml(r.user_name)}</b><div class="small">${escapeHtml(r.event_name || '-')} ｜ ${escapeHtml(r.reward_name)}</div></td>
+      <td>
+        <div class="choiceControl">
+          <select class="reward-choice-select" data-i="${i}">
+            ${selectOptions.map(x=>`<option value="${escapeHtml(x)}"${x===selected?' selected':''}>${x?escapeHtml(x):'待选择'}</option>`).join('')}
+          </select>
+          <button class="btn good reward-choice-save" data-i="${i}" type="button">保存选择</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="3" class="small">暂无需要处理的奖励选择</td></tr>';
+  document.querySelectorAll('.reward-choice-save').forEach(btn=>btn.onclick=()=>{
+    const i=+btn.dataset.i;
+    const selected=document.querySelector(`.reward-choice-select[data-i="${i}"]`)?.value || '';
+    saveRewardChoice(rows[i], selected);
+  });
+}
+async function saveRewardChoiceOptions(){
+  const status=document.getElementById('rewardChoiceStatus');
+  const target=parseChoiceTargetKey(document.getElementById('choiceOptionReward')?.value || '');
+  const options=String(document.getElementById('choiceOptionText')?.value || '').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const note=String(document.getElementById('choiceOptionNote')?.value || '').trim();
+  if(!target.reward_name){if(status) status.textContent='请选择奖励'; return;}
+  if(!options.length){if(status) status.textContent='请至少填写一个可选项'; return;}
+  const payload={
+    source_type:target.source_type,
+    event_name:target.event_name,
+    reward_name:target.reward_name,
+    choice_options:options,
+    is_choice_required:true,
+    note:note || null,
+    updated_at:new Date().toISOString()
+  };
+  const res=await sb.from('reward_choice_options').upsert(payload,{onConflict:'source_type,event_name,reward_name'});
+  if(res.error){if(status) status.textContent='保存失败：'+res.error.message; return;}
+  if(status) status.textContent='奖励选项已保存';
+  await logOperation('upsert_reward_choice_options', `${target.reward_name}｜${sourceTypeText(target.source_type)}`, payload);
+  await loadAll();
+}
+async function saveRewardChoice(row, selected=''){
+  const status=document.getElementById('rewardChoiceStatus');
+  if(!row){if(status) status.textContent='请选择需要保存的奖励'; return;}
+  const payload={
+    user_name:row.user_name,
+    source_type:row.source_type,
+    event_name:row.event_name || '',
+    reward_name:row.reward_name,
+    selected_choice:selected || null,
+    choice_status:selected ? 'selected' : 'pending',
+    updated_at:new Date().toISOString()
+  };
+  const res=await sb.from('reward_choices').upsert(payload,{onConflict:'user_name,source_type,event_name,reward_name'});
+  if(res.error){if(status) status.textContent='保存失败：'+res.error.message; return;}
+  if(selected && row.fulfilled) await syncRewardProgressCompleted(selected,`${sourceTypeText(row.source_type)}具体选项`);
+  if(status) status.textContent=selected ? `已保存选择：${selected}` : '已标记为待选择';
+  await logOperation('update_reward_choice', `${row.user_name}｜${row.reward_name}｜${selected || '待选择'}`, payload);
   await loadAll();
 }
 
@@ -1777,7 +2076,7 @@ function renderAnnouncementAdmin(){
     return `<tr>
       <td>${a.is_pinned?'<span class="pill warn">置顶</span>':''}<span class="pill ${visible?'good':'warn'}">${visible?'显示':'隐藏'}</span></td>
       <td><b>${escapeHtml(a.title||'公告通知')}</b><div class="small">${escapeHtml(String(a.created_at||'').slice(0,10))}${data.image_url?' ｜ 已配图':''}</div><div class="small">${escapeHtml(data.body||'')}</div></td>
-      <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn announcement-edit" data-id="${a.id}" type="button">编辑</button><button class="btn bad announcement-delete" data-id="${a.id}" type="button">删除</button></div></td>
+      <td><div class="adminRowActions"><button class="btn announcement-edit" data-id="${a.id}" type="button">编辑</button><button class="btn bad announcement-delete" data-id="${a.id}" type="button">删除</button></div></td>
     </tr>`;
   }).join('') || '<tr><td colspan="3" class="small">暂无公告</td></tr>';
   body.querySelectorAll('.announcement-edit').forEach(btn=>btn.onclick=()=>startEditAnnouncement(btn.dataset.id));
@@ -1796,7 +2095,7 @@ function clearAnnouncementForm(){
   document.getElementById('announcementStatus').value='visible';
   document.getElementById('announcementPinned').checked=false;
   document.getElementById('saveAnnouncementBtn').textContent='保存公告';
-  document.getElementById('cancelAnnouncementEditBtn').style.display='none';
+  document.getElementById('cancelAnnouncementEditBtn').classList.add('hidden');
 }
 
 function startEditAnnouncement(id){
@@ -1814,7 +2113,7 @@ function startEditAnnouncement(id){
   document.getElementById('announcementStatus').value=item.is_visible === false ? 'hidden' : 'visible';
   document.getElementById('announcementPinned').checked=!!item.is_pinned;
   document.getElementById('saveAnnouncementBtn').textContent='保存修改';
-  document.getElementById('cancelAnnouncementEditBtn').style.display='inline-block';
+  document.getElementById('cancelAnnouncementEditBtn').classList.remove('hidden');
 }
 
 async function saveAnnouncement(){
@@ -1850,7 +2149,7 @@ function renderLotteryAdmin(){
     return `<tr>
       <td><span class="pill good">已记录</span></td>
       <td><b>${escapeHtml(r.lottery_name||'抽奖结果')}</b><div class="small">${escapeHtml(r.lottery_type||'general')} ｜ ${escapeHtml(String(r.created_at||'').slice(0,10))}</div>${drawTime?`<div class="small">抽奖时间：${escapeHtml(formatDateTime(drawTime))}</div>`:''}${r.rule_text?`<div class="small">${escapeHtml(r.rule_text)}</div>`:''}<div class="small">获奖结果：${escapeHtml(lotteryWinnerList(r.winners_json).map(winnerText).filter(Boolean).join(' / ')||'暂无')}</div></td>
-      <td><div class="row" style="justify-content:flex-end;gap:6px"><button class="btn lottery-edit" data-id="${r.id}" type="button">编辑</button><button class="btn bad lottery-delete" data-id="${r.id}" type="button">删除</button></div></td>
+      <td><div class="adminRowActions"><button class="btn lottery-edit" data-id="${r.id}" type="button">编辑</button><button class="btn bad lottery-delete" data-id="${r.id}" type="button">删除</button></div></td>
     </tr>`;
   }).join('') || '<tr><td colspan="3" class="small">暂无抽奖记录</td></tr>';
   body.querySelectorAll('.lottery-edit').forEach(btn=>btn.onclick=()=>startEditLottery(btn.dataset.id));
@@ -1866,7 +2165,7 @@ function clearLotteryForm(){
   document.getElementById('lotteryWinnersJson').value='';
   document.getElementById('drawLotteryBtn').disabled=false;
   document.getElementById('saveLotteryBtn').textContent='保存手动记录';
-  document.getElementById('cancelLotteryEditBtn').style.display='none';
+  document.getElementById('cancelLotteryEditBtn').classList.add('hidden');
 }
 
 function startEditLottery(id){
@@ -1880,7 +2179,7 @@ function startEditLottery(id){
   document.getElementById('lotteryWinnersJson').value=jsonText(item.winners_json);
   document.getElementById('drawLotteryBtn').disabled=hasLotteryWinners(item.winners_json);
   document.getElementById('saveLotteryBtn').textContent='保存修改';
-  document.getElementById('cancelLotteryEditBtn').style.display='inline-block';
+  document.getElementById('cancelLotteryEditBtn').classList.remove('hidden');
 }
 
 async function saveLottery(options={}){
@@ -1951,6 +2250,66 @@ async function renderOperationLogs(){
       <td><b>${escapeHtml(row.detail || '-')}</b>${row.metadata?`<div class="small">${escapeHtml(JSON.stringify(row.metadata))}</div>`:''}</td>
     </tr>
   `).join('') || '<tr><td colspan="3" class="small">暂无操作日志</td></tr>';
+}
+
+async function renderVisitStatsAdmin(){
+  const cards=document.getElementById('visitStatsCards');
+  const moduleBody=document.getElementById('visitStatsModuleBody');
+  const logBody=document.getElementById('visitLogBody');
+  const status=document.getElementById('visitStatsStatus');
+  if(!cards || !moduleBody || !logBody || !status) return;
+  status.textContent='正在读取访问统计...';
+  const res=await sb.from('visit_logs').select('*').order('created_at',{ascending:false}).limit(1000);
+  if(res.error){
+    status.textContent='读取失败：请确认已在 Supabase 执行 database/visit_logs.sql，并使用管理员账号登录。';
+    cards.innerHTML='';
+    moduleBody.innerHTML='<tr><td colspan="3" class="small">暂无可显示数据</td></tr>';
+    logBody.innerHTML='<tr><td colspan="3" class="small">暂无可显示数据</td></tr>';
+    return;
+  }
+  const rows=res.data || [];
+  const todayStart=new Date();
+  todayStart.setHours(0,0,0,0);
+  const todayRows=rows.filter(row=>new Date(row.created_at) >= todayStart);
+  const uniqueVisitors=items=>new Set(items.map(row=>row.visitor_id).filter(Boolean)).size;
+  const latest=rows[0]?.created_at ? formatDateTime(rows[0].created_at) : '-';
+  status.textContent=`已读取最近 ${rows.length} 条访问记录`;
+  cards.innerHTML=[
+    {label:'今日访问',value:todayRows.length,meta:'按打开模块计数'},
+    {label:'今日访客',value:uniqueVisitors(todayRows),meta:'匿名去重'},
+    {label:'累计访问',value:rows.length,meta:'最近 1000 条'},
+    {label:'最近访问',value:latest,meta:'前台页面'}
+  ].map(item=>`
+    <div class="adminOverviewCard">
+      <span>${escapeHtml(item.label)}</span>
+      <b>${escapeHtml(String(item.value))}</b>
+      <small>${escapeHtml(item.meta)}</small>
+    </div>
+  `).join('');
+  const moduleMap=new Map();
+  rows.forEach(row=>{
+    const key=row.view_name || 'unknown';
+    if(!moduleMap.has(key)) moduleMap.set(key,{view:key,count:0,visitors:new Set()});
+    const item=moduleMap.get(key);
+    item.count += 1;
+    if(row.visitor_id) item.visitors.add(row.visitor_id);
+  });
+  moduleBody.innerHTML=[...moduleMap.values()]
+    .sort((a,b)=>b.count-a.count)
+    .map(item=>`
+      <tr>
+        <td><b>${escapeHtml(visitViewLabel(item.view))}</b><div class="small">${escapeHtml(item.view)}</div></td>
+        <td>${item.count}</td>
+        <td>${item.visitors.size}</td>
+      </tr>
+    `).join('') || '<tr><td colspan="3" class="small">暂无模块访问数据</td></tr>';
+  logBody.innerHTML=rows.slice(0,30).map(row=>`
+    <tr>
+      <td>${escapeHtml(formatDateTime(row.created_at))}</td>
+      <td><b>${escapeHtml(visitViewLabel(row.view_name))}</b><div class="small">${escapeHtml(row.page_path || '-')}</div></td>
+      <td>${escapeHtml(row.device_type || '-') }<div class="small">${escapeHtml(String(row.visitor_id || '-').slice(0,18))}</div></td>
+    </tr>
+  `).join('') || '<tr><td colspan="3" class="small">暂无最近访问数据</td></tr>';
 }
 
 function renderSiteSettingsAdmin(){
@@ -2067,7 +2426,7 @@ function renderSpecialRankAdmin(){
         ${r.note ? `<div class="small">备注：${escapeHtml(r.note)}</div>` : ''}
       </td>
       <td>
-        <div class="row" style="justify-content:flex-end;gap:6px">
+        <div class="adminRowActions">
           <button class="btn special-edit" data-id="${r.id}" type="button">编辑</button>
           <button class="btn ${r.fulfilled?'bad':'good'} special-toggle" data-id="${r.id}" type="button">${r.fulfilled?'标为未兑现':'标为已兑现'}</button>
           <button class="btn bad special-delete" data-id="${r.id}" type="button">删除</button>
@@ -2096,7 +2455,7 @@ function clearSpecialRankForm(){
   document.getElementById('specialFulfilledDate').value='';
   document.getElementById('specialNote').value='';
   const cancel=document.getElementById('cancelSpecialEditBtn');
-  if(cancel) cancel.style.display='none';
+  if(cancel) cancel.classList.add('hidden');
   document.getElementById('addSpecialRankBtn').textContent='保存特殊奖励';
 }
 
@@ -2113,7 +2472,7 @@ function startEditSpecialRank(id){
   document.getElementById('specialFulfilledDate').value=item.fulfilled_date || '';
   document.getElementById('specialNote').value=item.note || '';
   const cancel=document.getElementById('cancelSpecialEditBtn');
-  if(cancel) cancel.style.display='inline-block';
+  if(cancel) cancel.classList.remove('hidden');
   document.getElementById('addSpecialRankBtn').textContent='保存修改';
   document.getElementById('specialRankStatus').textContent='正在编辑：' + (item.reward_name || '');
 }
@@ -2202,6 +2561,16 @@ const saveRewardProgressBtn=document.getElementById('saveRewardProgressBtn');
 if(saveRewardProgressBtn) saveRewardProgressBtn.onclick=saveRewardProgress;
 const reloadRewardProgressBtn=document.getElementById('reloadRewardProgressBtn');
 if(reloadRewardProgressBtn) reloadRewardProgressBtn.onclick=async()=>{await loadAll(); renderRewardProgressAdmin();};
+const choiceOptionReward=document.getElementById('choiceOptionReward');
+if(choiceOptionReward) choiceOptionReward.onchange=renderRewardChoiceAdmin;
+const saveChoiceOptionBtn=document.getElementById('saveChoiceOptionBtn');
+if(saveChoiceOptionBtn) saveChoiceOptionBtn.onclick=saveRewardChoiceOptions;
+const reloadChoiceAdminBtn=document.getElementById('reloadChoiceAdminBtn');
+if(reloadChoiceAdminBtn) reloadChoiceAdminBtn.onclick=async()=>{await loadAll(); renderRewardChoiceAdmin();};
+const rewardChoiceSearch=document.getElementById('rewardChoiceSearch');
+if(rewardChoiceSearch) rewardChoiceSearch.oninput=renderRewardChoiceAdmin;
+const rewardChoiceFilter=document.getElementById('rewardChoiceFilter');
+if(rewardChoiceFilter) rewardChoiceFilter.onchange=renderRewardChoiceAdmin;
 
 const previewPkExcelBtn=document.getElementById('previewPkExcelBtn');
 if(previewPkExcelBtn) previewPkExcelBtn.onclick=()=>previewOrderExcel('pk');
@@ -2312,6 +2681,8 @@ if(reloadLotteryBtn) reloadLotteryBtn.onclick=async()=>{await loadAll(); renderL
 
 const reloadOperationLogsBtn=document.getElementById('reloadOperationLogsBtn');
 if(reloadOperationLogsBtn) reloadOperationLogsBtn.onclick=renderOperationLogs;
+const reloadVisitStatsBtn=document.getElementById('reloadVisitStatsBtn');
+if(reloadVisitStatsBtn) reloadVisitStatsBtn.onclick=renderVisitStatsAdmin;
 const saveSiteSettingsBtn=document.getElementById('saveSiteSettingsBtn');
 if(saveSiteSettingsBtn) saveSiteSettingsBtn.onclick=saveSiteSettings;
 const reloadSiteSettingsBtn=document.getElementById('reloadSiteSettingsBtn');
