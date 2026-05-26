@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>周童玥应援会数据站</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="styles/base.css" />
+<link rel="stylesheet" href="styles/layout.css" />
+<link rel="stylesheet" href="styles/cards.css" />
+<link rel="stylesheet" href="styles/admin.css" />
+<link rel="stylesheet" href="styles/table.css" />
+<link rel="stylesheet" href="styles/mobile.css" />
 </head>
 <body>
 <header class="siteHero">
@@ -42,6 +48,7 @@
         <button class="btn" data-view="rewards">奖励查询</button>
         <button class="btn noticeBtn" data-view="announcements">公告通知<span id="announcementBadge" class="noticeDot hidden"></span></button>
         <button class="btn" data-view="lottery">抽奖结果</button>
+        <button class="btn" data-view="questions">匿名提问</button>
       </div>
 
       <div class="pkSubNav hidden" id="pkSubNav">
@@ -116,14 +123,22 @@
       </div>
 
       <div class="tabs">
+        <span class="adminGroupLabel">数据管理</span>
+        <button class="tab" data-admin-tab="eventAdmin">总选场次</button>
+        <button class="tab" data-admin-tab="pkImportAdmin">导入总选</button>
+        <button class="tab" data-admin-tab="birthImportAdmin">导入生公</button>
+        <button class="tab" data-admin-tab="aliasAdmin">名称别名</button>
+        <span class="adminGroupLabel">奖励管理</span>
         <button class="tab active" data-admin-tab="rewardAdmin">奖励兑现</button>
-        <button class="tab" data-admin-tab="eventAdmin">新增 PK 场次</button>
-        <button class="tab" data-admin-tab="pkImportAdmin">导入 PK 数据</button>
-        <button class="tab" data-admin-tab="birthImportAdmin">导入生公数据</button>
         <button class="tab" data-admin-tab="ruleImportAdmin">导入奖励规则</button>
         <button class="tab" data-admin-tab="specialRankAdmin">特殊排名奖励</button>
         <button class="tab" data-admin-tab="unfulfilledAdmin">未兑现总表</button>
-        <button class="tab" data-admin-tab="aliasAdmin">名称别名</button>
+        <span class="adminGroupLabel">内容互动</span>
+        <button class="tab" data-admin-tab="announcementAdmin">公告管理</button>
+        <button class="tab" data-admin-tab="lotteryAdmin">抽奖管理</button>
+        <button class="tab" data-admin-tab="questionAdmin">提问回复</button>
+        <span class="adminGroupLabel">系统记录</span>
+        <button class="tab" data-admin-tab="operationLogAdmin">操作日志</button>
       </div>
 
       <div class="adminSection active" id="rewardAdmin">
@@ -150,7 +165,16 @@
 
       <div class="adminSection" id="pkImportAdmin">
         <h3>导入 PK 数据</h3>
-        <div class="small">格式：每行一条，支持 CSV：场次,名称,金额。第一行可以是表头。</div>
+        <div class="adminLead">首选上传微店订单 Excel，系统会识别收货人和实付金额；CSV 作为备用导入方式。</div>
+        <div class="formGrid">
+          <select id="pkExcelEvent"></select>
+          <input id="pkExcelFile" type="file" accept=".xlsx,.xls,.csv">
+          <button class="btn" id="previewPkExcelBtn" type="button">识别微店订单</button>
+        </div>
+        <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只保留“待发货”订单，同一名称会合并金额。</div>
+        <div id="pkExcelPreview" class="excelPreview hidden"></div>
+        <button class="btn hidden" id="applyPkExcelEditBtn" type="button">应用手动调整</button>
+        <button class="btn good hidden" id="confirmPkExcelBtn" type="button">确认导入识别数据</button>
         <textarea id="pkCsv" placeholder="event_name,user_name,amount&#10;春日踏青,波克布林,334.8"></textarea>
         <button class="btn good" id="importPkBtn">导入 PK 数据</button>
         <div class="status" id="pkImportStatus"></div>
@@ -158,7 +182,16 @@
 
       <div class="adminSection" id="birthImportAdmin">
         <h3>导入生公数据</h3>
-        <div class="small">格式：每行一条，支持 CSV：名称,金额,批次。第一行可以是表头。</div>
+        <div class="adminLead">首选上传微店订单 Excel，系统会识别收货人和实付金额；CSV 作为备用导入方式。</div>
+        <div class="formGrid">
+          <input id="birthExcelBatch" placeholder="批次名称，例如 5.16生公">
+          <input id="birthExcelFile" type="file" accept=".xlsx,.xls,.csv">
+          <button class="btn" id="previewBirthExcelBtn" type="button">识别微店订单</button>
+        </div>
+        <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只保留“待发货”订单，同一名称会合并金额。</div>
+        <div id="birthExcelPreview" class="excelPreview hidden"></div>
+        <button class="btn hidden" id="applyBirthExcelEditBtn" type="button">应用手动调整</button>
+        <button class="btn good hidden" id="confirmBirthExcelBtn" type="button">确认导入识别数据</button>
         <textarea id="birthCsv" placeholder="user_name,amount,batch_name&#10;徐乐迪,50,5.16生公"></textarea>
         <button class="btn good" id="importBirthBtn">导入生公数据</button>
         <div class="status" id="birthImportStatus"></div>
@@ -166,9 +199,16 @@
 
       <div class="adminSection" id="ruleImportAdmin">
         <h3>导入奖励规则</h3>
-        <div class="small">格式：每行一条，支持 CSV：场次,门槛金额,奖励名称,排序。第一行可以是表头。</div>
-        <textarea id="ruleCsv" placeholder="event_name,threshold,reward_name,sort_order&#10;六月冲刺,322,限定冰箱贴,1&#10;六月冲刺,128,拼豆挂件,2"></textarea>
-        <button class="btn good" id="importRuleBtn">导入奖励规则</button>
+        <div class="adminLead">先选择已经创建的 PK 场次，再填写金额门槛和对应奖励。每一行是一档奖励，提交后会同步该场次的奖励规则；删除表格中的已有行并提交，会删除对应旧规则。</div>
+        <div class="formGrid two">
+          <select id="ruleEventSelect"></select>
+          <button class="btn" id="addRuleRowBtn" type="button">新增一档奖励</button>
+        </div>
+        <div id="ruleRowsBox" class="ruleRowsBox"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn good" id="importRuleBtn" type="button">统一提交奖励规则</button>
+          <button class="btn" id="resetRuleRowsBtn" type="button">清空重填</button>
+        </div>
         <div class="status" id="ruleImportStatus"></div>
       </div>
 
@@ -222,12 +262,119 @@
 
       <div class="adminSection" id="aliasAdmin">
         <h3>名称别名管理</h3>
-        <div class="formGrid two">
-          <input id="aliasName" placeholder="别名，例如 Riute.">
-          <input id="canonicalName" placeholder="统一名称，例如 Riute">
+        <div class="adminLead">用于把同一个人的不同写法合并统计。左侧填写订单里出现的写法，右侧填写最终展示和统计使用的统一名称。</div>
+        <div class="aliasExample">
+          <span class="pill">例如：Riute.</span>
+          <span class="aliasArrow">→</span>
+          <span class="pill good">Riute</span>
         </div>
-        <button class="btn good" id="addAliasBtn">保存别名</button>
+        <div class="formGrid two">
+          <input id="aliasName" placeholder="订单里的写法，例如 Riute.">
+          <input id="canonicalName" placeholder="统一后的名称，例如 Riute">
+        </div>
+        <button class="btn good" id="addAliasBtn">保存名称合并规则</button>
         <div class="status" id="aliasStatus"></div>
+      </div>
+
+      <div class="adminSection" id="announcementAdmin">
+        <h3>公告管理</h3>
+        <div class="small">用于发布前台公告通知。隐藏公告不会在前台展示。</div>
+        <input id="announcementTitle" placeholder="公告标题">
+        <textarea id="announcementContent" placeholder="公告内容"></textarea>
+        <label class="small imageUploadBox">
+          公告配图
+          <input id="announcementImageFile" type="file" accept="image/*">
+        </label>
+        <input id="announcementImageUrl" type="hidden">
+        <div class="small" id="announcementImageStatus">未选择配图</div>
+        <img id="announcementImagePreview" class="announcementImagePreview hidden" alt="公告配图预览">
+        <div class="formGrid">
+          <select id="announcementStatus">
+            <option value="visible">显示</option>
+            <option value="hidden">隐藏</option>
+          </select>
+          <label class="small inlineCheck"><input id="announcementPinned" type="checkbox" style="min-height:auto"> 置顶公告</label>
+          <button class="btn good" id="saveAnnouncementBtn" type="button">保存公告</button>
+        </div>
+        <input id="announcementEditId" type="hidden">
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="cancelAnnouncementEditBtn" type="button" style="display:none">取消编辑</button>
+          <button class="btn" id="reloadAnnouncementsBtn" type="button">刷新公告</button>
+        </div>
+        <div class="status" id="announcementAdminStatus"></div>
+        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>公告内容</th><th>操作</th></tr></thead><tbody id="announcementAdminBody"></tbody></table></div>
+      </div>
+
+      <div class="adminSection" id="lotteryAdmin">
+        <h3>抽奖管理</h3>
+        <div class="small">自动抽奖会在确认抽选后直接生成记录并锁定结果。</div>
+        <div class="adminSubhead">自动抽奖</div>
+        <div class="formGrid">
+          <select id="lotteryBuildMode">
+            <option value="monthly">月份达标抽奖</option>
+            <option value="single">单场达标抽奖</option>
+          </select>
+          <input id="lotteryMonth" type="month">
+          <select id="lotterySingleEvent"></select>
+        </div>
+        <div class="formGrid">
+          <input id="lotteryThreshold" type="number" step="0.01" placeholder="达标金额，例如 12.8">
+          <input id="lotteryWinnerCount" type="number" min="1" step="1" placeholder="抽取人数，例如 1">
+          <input id="lotteryPrizeText" placeholder="奖品/备注，可空">
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="buildLotteryPoolBtn" type="button">生成奖池</button>
+          <button class="btn good" id="drawLotteryBtn" type="button">确认抽选</button>
+        </div>
+        <div class="formGrid">
+          <input id="lotteryName" placeholder="抽奖名称，例如 6月总选抽奖">
+          <select id="lotteryType">
+            <option value="monthly">月份抽奖</option>
+            <option value="single">单场抽奖</option>
+            <option value="general">综合</option>
+            <option value="pk">总选</option>
+            <option value="birth">生公</option>
+            <option value="other">其他</option>
+          </select>
+        </div>
+        <textarea id="lotteryRule" placeholder="抽奖规则说明，可空"></textarea>
+        <details class="advancedBox">
+          <summary>高级编辑</summary>
+          <textarea id="lotteryPoolJson" placeholder='参与池 JSON，可空，例如 ["名字A","名字B"]'></textarea>
+          <textarea id="lotteryWinnersJson" placeholder='获奖结果 JSON，例如 [{"name":"名字A","prize":"奖品"}]'></textarea>
+        </details>
+        <input id="lotteryEditId" type="hidden">
+        <div class="row" style="margin-top:8px">
+          <button class="btn good" id="saveLotteryBtn" type="button">保存手动记录</button>
+          <button class="btn" id="cancelLotteryEditBtn" type="button" style="display:none">取消编辑</button>
+          <button class="btn" id="reloadLotteryBtn" type="button">刷新抽奖</button>
+        </div>
+        <div class="status" id="lotteryAdminStatus"></div>
+        <div class="adminSubhead">抽奖记录</div>
+        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>抽奖内容</th><th>操作</th></tr></thead><tbody id="lotteryAdminBody"></tbody></table></div>
+      </div>
+
+      <div class="adminSection" id="operationLogAdmin">
+        <h3>操作日志</h3>
+        <div class="small">显示管理员近期导入、抽奖、公告和奖励操作记录。</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" id="reloadOperationLogsBtn" type="button">刷新日志</button>
+        </div>
+        <div class="status" id="operationLogStatus"></div>
+        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>时间</th><th>操作</th><th>详情</th></tr></thead><tbody id="operationLogBody"></tbody></table></div>
+      </div>
+
+      <div class="adminSection" id="questionAdmin">
+        <h3>提问回复</h3>
+        <div class="small">查看匿名提问并回复。回复后，用户可凭查询码查看回答。</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn active questionFilterBtn" data-question-filter="pending" type="button">待回复</button>
+          <button class="btn questionFilterBtn" data-question-filter="all" type="button">全部</button>
+          <button class="btn questionFilterBtn" data-question-filter="answered" type="button">已回复</button>
+          <button class="btn" id="reloadQuestionsBtn" type="button">刷新提问</button>
+        </div>
+        <div class="status" id="questionAdminStatus"></div>
+        <div class="list" style="margin-top:10px"><table class="table"><thead><tr><th>状态</th><th>提问内容</th><th>回复</th></tr></thead><tbody id="questionAdminBody"></tbody></table></div>
       </div>
     </div>
   </div>

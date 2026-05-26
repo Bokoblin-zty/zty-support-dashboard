@@ -1,0 +1,144 @@
+/* Page layout, header, navigation */
+header{padding:22px 18px 16px;background:linear-gradient(135deg,#fff,#fff9e8 58%,#fff2bf);border-bottom:1px solid var(--line)}
+.wrap{max-width:1180px;margin:auto;padding:18px}
+.grid{display:grid;gap:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.controls{margin:16px 0;position:sticky;top:0;z-index:5;background:rgba(255,255,255,.9);backdrop-filter:blur(10px)}
+.list{max-height:620px;overflow:auto}
+.navSection{display:grid;gap:10px}
+.navRow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.eventFilter{display:flex;align-items:center;gap:8px;justify-content:flex-end;padding-top:2px}
+.mainNav{
+  grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+}
+.pkNav{
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+}
+.pkSubNav{
+  margin-top:12px;
+  padding-top:12px;
+  border-top:1px solid rgba(0,0,0,.06);
+}
+.mainNav .btn{
+  min-height:46px;
+  font-weight:850;
+}
+.pkNav .btn{
+  min-height:38px;
+  background:#fff;
+}
+#pkSubTitle{
+  display:block !important;
+  min-height:18px;
+}
+.siteHero{
+  padding:28px 16px 22px;
+  position:relative;
+  overflow:hidden;
+}
+.siteHero::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:4px;
+  background:linear-gradient(90deg,#f6d56b,#f7bf3d,#fff0ad);
+}
+.heroInner{
+  padding:0 !important;
+}
+.heroEyebrow{
+  color:#a96b22;
+  font-size:12px;
+  font-weight:850;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  margin-bottom:7px;
+}
+.siteHero h1{
+  font-size:30px;
+  color:#332813;
+}
+.sectionLabel,.navLabel{
+  color:#8a6a2f;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.06em;
+}
+.secondaryLabel{
+  color:#a96b22;
+}
+.secondaryMetrics{
+  margin-top:10px;
+}
+.controls{
+  border-color:#ead28b;
+  background:rgba(255,255,255,.94);
+}
+.mainNav .btn,.pkNav .btn{
+  position:relative;
+  border-color:#ead28b;
+  color:#5c4213;
+  background:linear-gradient(180deg,#fff,#fff9e8);
+}
+.mainNav .btn.active,.pkNav .btn.active{
+  color:#fff;
+  background:linear-gradient(135deg,#d99a16,#b87512);
+  border-color:#b87512;
+  box-shadow:0 10px 22px rgba(184,117,18,.2);
+}
+.noticeBtn{
+  padding-right:24px;
+}
+.noticeDot{
+  position:absolute;
+  top:8px;
+  right:9px;
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background:#ef4444;
+  box-shadow:0 0 0 3px rgba(239,68,68,.12);
+}
+.pkSubNav{
+  background:#fffaf0;
+  border:1px solid #f4dfaa;
+  border-radius:16px;
+  padding:12px;
+}
+.eventFilter{
+  background:#fff;
+  border:1px solid #f1dfae;
+  border-radius:14px;
+  padding:10px;
+}
+.siteHero{
+  background:linear-gradient(180deg,#fff 0%,#fff9e8 64%,#fff2bf 100%);
+}
+.heroEyebrow{
+  text-transform:none;
+  letter-spacing:0;
+  color:#9a6a16;
+}
+.siteHero h1{
+  margin-bottom:8px;
+}
+.controls{
+  margin:18px 0 12px;
+}
+.navSection{
+  gap:12px;
+}
+.mainNav{
+  grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+}
+.mainNav .btn{
+  min-height:48px;
+}
+.pkSubNav{
+  margin-top:2px;
+}
+.pkNav .btn{
+  min-height:42px;
+}

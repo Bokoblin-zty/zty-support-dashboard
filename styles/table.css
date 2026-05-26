@@ -1,0 +1,77 @@
+/* Tables, reward lists, announcements, lottery, questions */
+details.rewardDetails{border:1px solid var(--line);border-radius:14px;background:#fff;margin:8px 0;overflow:hidden}
+details.rewardDetails summary{cursor:pointer;padding:12px 14px;display:flex;justify-content:space-between;gap:10px;align-items:center;font-weight:800}
+.rewardDetailHint{display:block;color:#9a6a16;margin-top:3px;font-weight:700}
+.rewardList{padding:0 14px 12px 14px;display:grid;gap:8px}
+.rewardItem{display:flex;justify-content:space-between;gap:10px;padding:9px 10px;border-radius:12px;background:#fffaf0;border:1px solid var(--line)}
+.lotteryResult{text-align:center;display:grid;gap:8px;justify-items:center}
+.lotteryWinner{width:100%;padding:8px 10px;border-radius:12px;background:#fff8df;border:1px solid var(--line);color:var(--ink)}
+.lotteryPool{width:100%;margin-top:8px;text-align:left}
+.lotteryPool summary{cursor:pointer;text-align:center;color:#8a5b00;font-weight:800}
+.lotteryPoolList{margin-top:8px;max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fffaf0;padding:8px}
+.lotteryTable th,.lotteryTable td{text-align:center!important;vertical-align:middle}
+.lotteryTable td:nth-child(2){line-height:1.5}
+.questionPanel{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;text-align:left}
+.questionBox,.questionAnswer{border:1px solid var(--line);border-radius:14px;background:#fffaf0;padding:14px}
+.questionBox h3{margin-top:0}
+.questionResult{margin-top:10px}
+.questionAnswer{display:grid;gap:8px}
+.questionAnswerInput{min-height:90px;margin-bottom:8px}
+.rankPill{
+  min-width:44px;
+  text-align:center;
+  font-weight:900;
+}
+.rankPill.top1{background:#fff4c7;color:#9f6b00;border:1px solid #f1cf67}
+.rankPill.top2{background:#f4f6f9;color:#68707d;border:1px solid #d7dbe2}
+.rankPill.top3{background:#fff0e7;color:#96522a;border:1px solid #e0ad88}
+.rankPill.normal{background:#fff3c4;color:#8a5b00}
+.topName{
+  color:#332813;
+}
+.noteRow td{
+  background:#fffaf0;
+  color:#8a5b17;
+  border-bottom:1px solid #f0dca5;
+  text-align:left !important;
+}
+.announcementCard{
+  border:1px solid #ead28b;
+  border-left:4px solid #d99a16;
+  border-radius:14px;
+  background:#fffaf0;
+  padding:14px;
+  line-height:1.55;
+}
+.announcementCard b{
+  display:block;
+  margin-bottom:5px;
+}
+.announcementCard summary{
+  cursor:pointer;
+  list-style:none;
+}
+.announcementCard summary::-webkit-details-marker{
+  display:none;
+}
+.announcementCard summary span{
+  display:grid;
+  gap:3px;
+}
+.announcementHint{
+  color:#9a6a16;
+}
+.announcementBody{
+  margin-top:10px;
+  white-space:pre-wrap;
+}
+.announcementImage{
+  display:block;
+  width:100%;
+  max-height:420px;
+  object-fit:contain;
+  margin-top:12px;
+  border-radius:12px;
+  border:1px solid #ead28b;
+  background:#fff;
+}

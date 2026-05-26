@@ -1,0 +1,223 @@
+/* Data cards, overview, lookup */
+.cards{grid-template-columns:repeat(4,minmax(0,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:var(--shadow)}
+.k{font-size:12px;color:var(--muted)}
+.v{font-size:27px;font-weight:850;margin-top:6px;line-height:1.08}
+.lookupCard{margin:14px 0}
+.lookupBox{display:flex;gap:8px;align-items:center}
+.lookupBox input{flex:1;min-width:0}
+.lookupResult{margin-top:12px}
+.lookupSummary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.lookupMini{background:#fffaf0;border:1px solid var(--line);border-radius:14px;padding:10px}
+.lookupMini b{display:block;font-size:18px;margin-top:3px}
+.eventAmountList{display:grid;gap:8px}
+.eventAmountItem{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:14px;background:#fff;padding:11px 12px}
+.eventAmountItem .amt{font-weight:850;color:var(--accent)}
+.overviewHeroRow{
+  display:table-row !important;
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+}
+.overviewHeroRow td{
+  padding:0 0 12px !important;
+}
+.overviewPanel{
+  border-radius:22px;
+  padding:20px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(246,196,83,.18), transparent 35%),
+    radial-gradient(circle at 90% 0%, rgba(255,227,128,.22), transparent 35%),
+    #fff;
+  border:1px solid rgba(217,154,22,.14);
+  box-shadow:0 10px 28px rgba(15,23,42,.05);
+}
+.overviewTitle{
+  font-size:20px;
+  font-weight:950;
+  margin-bottom:6px;
+}
+.overviewDesc{
+  color:var(--muted);
+  font-size:13px;
+  margin-bottom:14px;
+}
+.overviewGrid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+}
+.overviewMini{
+  border-radius:16px;
+  background:rgba(255,255,255,.76);
+  border:1px solid rgba(0,0,0,.05);
+  padding:12px;
+  text-align:center;
+}
+.overviewMini span{
+  display:block;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:800;
+  margin-bottom:6px;
+}
+.overviewMini b{
+  font-size:20px;
+  color:var(--accent);
+}
+.metricCards{
+  gap:10px;
+}
+.metricCards .card{
+  min-height:88px;
+  border-color:#f0dfad;
+  background:linear-gradient(180deg,#fff,#fffaf0);
+}
+.metricCards .card:nth-child(2n){
+  background:linear-gradient(180deg,#fff,#fff7df);
+}
+.k{
+  font-weight:800;
+}
+.v{
+  color:#c78500;
+  overflow-wrap:anywhere;
+}
+.contentCard,.lookupCard{
+  border-color:#f1dfae;
+}
+.overviewPanel{
+  background:linear-gradient(135deg,#fff,#fff8df 58%,#fff1bd);
+  border-color:#ead28b;
+}
+.overviewTitle{
+  color:#332813;
+}
+.overviewMini{
+  text-align:left;
+}
+.overviewMini b{
+  color:#c78500;
+  overflow-wrap:anywhere;
+}
+.emptyState{
+  border:1px dashed #e6c77b;
+  border-radius:18px;
+  background:#fffaf0;
+  padding:18px;
+}
+.lookupBox input{
+  min-width:0;
+}
+.fundSummary{
+  grid-template-columns:1.3fr 1fr 1fr 1fr;
+}
+.fundSummary .card{
+  min-height:74px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+.fundSummary .primaryMetric{
+  min-height:88px;
+  background:linear-gradient(135deg,#fffaf0,#fff1bd);
+  border-color:#efc86a;
+}
+.fundSummary .primaryMetric .v{
+  font-size:31px;
+  color:#b87512;
+}
+.detailMetrics{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+}
+.detailMetrics .card{
+  min-height:76px;
+  box-shadow:none;
+}
+.contentCard{
+  margin-top:12px;
+}
+.overviewPanel{
+  padding:18px;
+  text-align:left;
+}
+.overviewTitle{
+  font-size:22px;
+  text-align:left;
+}
+.overviewDesc{
+  text-align:left;
+}
+.overviewGrid{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+.overviewMini.primary{
+  background:#fff8d8;
+  border-color:#ebca66;
+}
+.overviewMini.primary b{
+  color:#a96b00;
+}
+.overviewRankGrid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+  margin-top:14px;
+}
+.overviewRankCard{
+  border:1px solid #ead7a0;
+  background:#fff;
+  border-radius:16px;
+  padding:12px;
+}
+.overviewRankCard h3{
+  margin:0 0 10px;
+  font-size:15px;
+  text-align:left;
+}
+.overviewRankItem{
+  display:grid;
+  grid-template-columns:1fr;
+  align-items:start;
+  gap:5px;
+  padding:9px 0;
+  border-top:1px solid #f2e3b8;
+}
+.overviewRankItem:first-of-type{
+  border-top:0;
+}
+.rankIdentity{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.rankIdentity b{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.rankBreakdown{
+  grid-column:1/-1;
+  padding-left:52px;
+}
+.overviewRankItem b,.overviewRankItem strong{
+  overflow-wrap:anywhere;
+}
+.rankAmount{
+  padding-left:52px;
+  text-align:left;
+}
+.rankAmount strong{
+  display:block;
+  color:#c78500;
+  font-size:14px;
+}
+.lookupCard{
+  background:linear-gradient(180deg,#fff,#fffaf0);
+}
+.lookupCard h3{
+  color:#3b2b12;
+}
+.emptyState{
+  line-height:1.55;
+}
