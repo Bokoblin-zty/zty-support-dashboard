@@ -177,6 +177,17 @@
       <div class="adminSection rewardModule" id="rewardAdmin">
         <h3>奖励兑现管理</h3>
         <div class="adminLead">集中处理普通奖励兑现状态。搜索用户、场次或奖励后，可直接标记已兑现或未兑现。</div>
+        <div class="adminSubhead">按 ID 快速兑现</div>
+        <div class="formGrid adminFilterBar">
+          <input id="quickFulfillName" list="nameOptions" type="search" placeholder="输入 ID，查看该 ID 奖励状态">
+          <input id="quickFulfillDate" type="text" placeholder="兑现日期，默认今天">
+          <button class="btn good" id="quickFulfillSearchBtn" type="button">查询未兑现</button>
+        </div>
+        <div class="status" id="quickFulfillStatus"></div>
+        <div class="quickFulfillList" id="quickFulfillList">
+          <div class="small">输入 ID 后，会显示该 ID 的奖励兑现状态，并优先排列未兑现奖励。</div>
+        </div>
+        <div class="adminSubhead">完整奖励列表</div>
         <div class="formGrid adminFilterBar">
           <input id="rewardSearch" type="search" placeholder="搜索用户名 / 场次 / 奖励">
           <input id="rewardDate" type="text" placeholder="兑现日期，例如 5.18">

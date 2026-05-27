@@ -546,6 +546,13 @@ function formatDateTime(value){
   if(Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString('zh-CN',{hour12:false});
 }
+function todayDateText(){
+  const date=new Date();
+  const year=date.getFullYear();
+  const month=String(date.getMonth()+1).padStart(2,'0');
+  const day=String(date.getDate()).padStart(2,'0');
+  return `${year}-${month}-${day}`;
+}
 function visitViewLabel(view){
   return VISIT_VIEW_LABELS[view] || view || '页面访问';
 }
@@ -1305,19 +1312,29 @@ function setAdminTab(tabId){
   if(tabId==='visitStatsAdmin') renderVisitStatsAdmin();
   if(tabId==='rewardProgressAdmin') renderRewardProgressAdmin();
   if(tabId==='rewardChoiceAdmin') renderRewardChoiceAdmin();
+  if(tabId==='rewardAdmin') renderAdminRewards();
   if(tabId==='adminOverview') renderAdminOverview();
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setAdminTab(t.dataset.adminTab));
 
 document.getElementById('reloadRewards').onclick=()=>renderAdminRewards();
 document.getElementById('rewardSearch').oninput=()=>renderAdminRewards();
+const quickFulfillSearchBtn=document.getElementById('quickFulfillSearchBtn');
+if(quickFulfillSearchBtn) quickFulfillSearchBtn.onclick=renderQuickFulfillAdmin;
+const quickFulfillName=document.getElementById('quickFulfillName');
+if(quickFulfillName) quickFulfillName.onkeydown=e=>{
+  if(e.key==='Enter'){
+    e.preventDefault();
+    renderQuickFulfillAdmin();
+  }
+};
 
 async function renderAdminOverview(){
   const stats=document.getElementById('adminOverviewStats');
   const logs=document.getElementById('adminOverviewLogs');
   const tasks=document.getElementById('adminTaskGrid');
   if(!stats || !logs) return;
-  const normalUnfulfilled=allEarnedRewards().filter(r=>!r.fulfilled).length;
+  const normalUnfulfilled=[...allEarnedRewards(), ...allEarnedBirthRewards()].filter(r=>!r.fulfilled).length;
   const specialUnfulfilled=(DATA.specialRankRewards || []).filter(r=>!r.fulfilled).length;
   const visibleAnnouncementCount=(DATA.announcements || []).filter(a=>a.is_visible !== false).length;
   const totalRewardCount=allRewardProgressOptions().length;
@@ -1373,6 +1390,8 @@ async function renderAdminOverview(){
 
 function renderAdminRewards(){
   const kw=(document.getElementById('rewardSearch').value||'').toLowerCase().trim();
+  const quickDate=document.getElementById('quickFulfillDate');
+  if(quickDate && !quickDate.value) quickDate.value=todayDateText();
   let rows=allEarnedRewards();
   rows=rows.filter(r=>!kw || `${r.user_name} ${r.event_name} ${r.reward_name}`.toLowerCase().includes(kw));
   document.getElementById('rewardAdminBody').innerHTML=rows.map((r,i)=>`
@@ -1382,6 +1401,132 @@ function renderAdminRewards(){
       <td><button class="btn ${r.fulfilled?'bad':'good'} reward-toggle" data-i="${i}">${r.fulfilled?'标为未兑现':'标为已兑现'}</button></td>
     </tr>`).join('') || '<tr><td colspan="3" class="small">暂无奖励数据</td></tr>';
   document.querySelectorAll('.reward-toggle').forEach(btn=>btn.onclick=()=>toggleReward(rows[+btn.dataset.i]));
+}
+
+function quickFulfillRowsForName(name){
+  const target=canon(name);
+  if(!target) return [];
+  const normalRows=[
+    ...allEarnedRewards(),
+    ...allEarnedBirthRewards()
+  ].map(r=>({
+    ...r,
+    user_name:canon(r.user_name),
+    row_key:`${r.source_type}|${canon(r.user_name)}|${r.event_name}|${r.reward_group || ''}|${r.reward_name}`
+  }));
+  const specialRows=(DATA.specialRankRewards || []).map(r=>({
+    source_type:'special',
+    id:r.id,
+    user_name:canon(r.winner_name),
+    event_name:r.event_name || '特殊排名奖励',
+    reward_name:r.reward_name,
+    amount:0,
+    fulfilled:!!r.fulfilled,
+    fulfilled_date:r.fulfilled_date || '',
+    row_key:`special|${r.id}`
+  }));
+  const rows=[...normalRows, ...specialRows]
+    .filter(r=>canon(r.user_name)===target)
+    .sort((a,b)=>Number(!!a.fulfilled)-Number(!!b.fulfilled) || `${sourceTypeText(a.source_type)}${a.event_name}${a.reward_name}`.localeCompare(`${sourceTypeText(b.source_type)}${b.event_name}${b.reward_name}`,'zh-Hans-CN'));
+  return rows;
+}
+
+function renderQuickFulfillAdmin(){
+  const input=document.getElementById('quickFulfillName');
+  const list=document.getElementById('quickFulfillList');
+  const status=document.getElementById('quickFulfillStatus');
+  const dateInput=document.getElementById('quickFulfillDate');
+  if(!input || !list) return;
+  if(dateInput && !dateInput.value) dateInput.value=todayDateText();
+  const name=canon(input.value);
+  if(!name){
+    list.innerHTML='<div class="small">输入 ID 后，会显示该 ID 的奖励兑现状态，并优先排列未兑现奖励。</div>';
+    if(status) status.textContent='';
+    return;
+  }
+  const rows=quickFulfillRowsForName(name);
+  const unfulfilledCount=rows.filter(r=>!r.fulfilled).length;
+  if(status) status.textContent=rows.length ? `已找到 ${name} 的 ${unfulfilledCount} 条未兑现奖励` : `${name} 暂无奖励记录`;
+  list.innerHTML=rows.map((r,i)=>`
+    <div class="quickFulfillItem">
+      <div>
+        <b>${escapeHtml(r.reward_name)} - ${escapeHtml(r.event_name || '-')}</b>
+        <div class="small">
+          <span class="pill ${r.fulfilled?'good':'warn'}">${r.fulfilled?`已兑现${r.fulfilled_date?' '+escapeHtml(r.fulfilled_date):''}`:'未兑现'}</span>
+          ${escapeHtml(sourceTypeText(r.source_type))}${r.amount ? ` ｜ 金额 ${fmt(r.amount)}` : ''}${renderAdminChoiceSummary(r)}
+        </div>
+      </div>
+      <button class="btn ${r.fulfilled?'bad':'good'} quick-fulfill-done" data-i="${i}" type="button">${r.fulfilled?'标为未兑现':'标记已兑现'}</button>
+    </div>
+  `).join('') || '<div class="small">该 ID 暂无奖励记录。</div>';
+  list.querySelectorAll('.quick-fulfill-done').forEach(btn=>{
+    btn.onclick=()=>toggleQuickFulfill(rows[+btn.dataset.i], btn);
+  });
+}
+
+async function toggleQuickFulfill(row, button=null){
+  const status=document.getElementById('quickFulfillStatus');
+  if(!row){if(status) status.textContent='请选择需要兑现的奖励'; return;}
+  const nextFulfilled=!row.fulfilled;
+  if(button){
+    button.disabled=true;
+    button.textContent='保存中...';
+  }
+  if(status) status.textContent=`正在更新：${row.reward_name} - ${row.event_name}`;
+  const date=nextFulfilled ? ((document.getElementById('quickFulfillDate')?.value || '').trim() || todayDateText()) : null;
+  let res;
+  try{
+    if(row.source_type==='pk'){
+      const payload={user_name:row.user_name,event_name:row.event_name,reward_name:row.reward_name,fulfilled:nextFulfilled,fulfilled_date:date};
+      res=await sb.from('reward_status').upsert(payload,{onConflict:'user_name,event_name,reward_name'});
+      if(!res.error && nextFulfilled){
+        const choice=choiceForUser(row.user_name,row.source_type,row.event_name,row.reward_name);
+        await syncRewardProgressCompleted(choice?.selected_choice || row.reward_name,'总选奖励');
+      }
+      if(!res.error) await logOperation('quick_toggle_reward', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, payload);
+    }else if(row.source_type==='birth'){
+      const payload={user_name:row.user_name,reward_group:row.reward_group || row.event_name || '生公',reward_name:row.reward_name,fulfilled:nextFulfilled,fulfilled_date:date};
+      res=await sb.from('birth_reward_status').upsert(payload,{onConflict:'user_name,reward_group,reward_name'});
+      if(!res.error && nextFulfilled){
+        const choice=choiceForUser(row.user_name,row.source_type,row.event_name,row.reward_name);
+        await syncRewardProgressCompleted(choice?.selected_choice || row.reward_name,'生公奖励');
+      }
+      if(!res.error) await logOperation('quick_toggle_birth_reward', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, payload);
+    }else if(row.source_type==='special'){
+      res=await sb.from('special_rank_rewards').update({fulfilled:nextFulfilled, fulfilled_date:date}).eq('id', row.id);
+      if(!res.error && nextFulfilled){
+        await syncRewardProgressCompleted(row.reward_name,'特殊排名奖励');
+      }
+      if(!res.error) await logOperation('quick_toggle_special_reward', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, {id:row.id,fulfilled:nextFulfilled,fulfilled_date:date});
+    }
+    if(res?.error){
+      if(status) status.textContent='保存失败：'+res.error.message;
+      if(button){
+        button.disabled=false;
+        button.textContent=row.fulfilled ? '标为未兑现' : '标记已兑现';
+      }
+      return;
+    }
+    if(!res){
+      if(status) status.textContent='保存失败：未识别的奖励类型';
+      if(button){
+        button.disabled=false;
+        button.textContent=row.fulfilled ? '标为未兑现' : '标记已兑现';
+      }
+      return;
+    }
+    if(status) status.textContent=`已更新：${row.reward_name} - ${row.event_name}`;
+    await loadAll();
+    renderQuickFulfillAdmin();
+    renderAdminRewards();
+    renderSpecialRankAdmin();
+  }catch(err){
+    if(status) status.textContent='保存失败：'+(err?.message || err);
+    if(button){
+      button.disabled=false;
+      button.textContent=row.fulfilled ? '标为未兑现' : '标记已兑现';
+    }
+  }
 }
 
 function renderAdminChoiceSummary(row){
