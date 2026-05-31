@@ -1940,6 +1940,31 @@ function safeFileName(text){
     .replace(/\s+/g,'_')
     .slice(0,80) || 'pk';
 }
+function applyPkExportSheetStyle(sheet,totalRows){
+  const border={style:'thin',color:{rgb:'000000'}};
+  const center={horizontal:'center',vertical:'center'};
+  const range=XLSX.utils.decode_range(sheet['!ref']);
+  for(let row=range.s.r; row<=range.e.r; row++){
+    for(let col=range.s.c; col<=range.e.c; col++){
+      const ref=XLSX.utils.encode_cell({r:row,c:col});
+      if(!sheet[ref]) sheet[ref]={t:'s',v:''};
+      sheet[ref].s={
+        alignment:center,
+        border:{top:border,bottom:border,left:border,right:border},
+        font:{name:'Arial',sz:12}
+      };
+      if(row===0){
+        sheet[ref].s.font={name:'Arial',sz:20,bold:true};
+      }
+      if(row===1){
+        sheet[ref].s.font={name:'Arial',sz:12,bold:true};
+      }
+      if(row>=2 && row<totalRows-1 && (col===0 || col===3)){
+        sheet[ref].s.fill={fgColor:{rgb:'FFFF00'}};
+      }
+    }
+  }
+}
 function exportPkEventExcel(){
   const status=document.getElementById('pkImportStatus');
   const eventName=document.getElementById('pkExportEvent')?.value || '';
@@ -1948,9 +1973,41 @@ function exportPkEventExcel(){
   const rows=aggregateByEventUser(DATA.records,eventName)
     .filter(r=>r.event_name===eventName && num(r.amount)>0)
     .sort((a,b)=>num(b.amount)-num(a.amount) || byNameAsc({name:a.user_name},{name:b.user_name}))
-    .map(r=>({ID:r.user_name,金额:num(r.amount)}));
+    .map((r,index)=>({rank:index+1,name:r.user_name,amount:num(r.amount)}));
   if(!rows.length){if(status) status.textContent='该场次暂无可导出的 PK 数据'; return;}
-  const sheet=XLSX.utils.json_to_sheet(rows,{header:['ID','金额']});
+  const splitAt=rows.length<=40 ? Math.min(20,rows.length) : Math.ceil(rows.length/2);
+  const leftRows=rows.slice(0,splitAt);
+  const rightRows=rows.slice(splitAt);
+  const bodyRows=Math.max(leftRows.length,rightRows.length,20);
+  const total=rows.reduce((sum,row)=>sum+num(row.amount),0);
+  const table=[
+    [`${eventName}PK数据`,'','','','',''],
+    ['序号','名称','金额','序号','名称','金额']
+  ];
+  for(let i=0;i<bodyRows;i++){
+    const left=leftRows[i];
+    const right=rightRows[i];
+    table.push([
+      left?.rank || '',
+      left?.name || '',
+      left ? num(left.amount) : '',
+      right?.rank || '',
+      right?.name || '',
+      right ? num(right.amount) : ''
+    ]);
+  }
+  table.push(['总额',num(total),'','','','']);
+  const sheet=XLSX.utils.aoa_to_sheet(table);
+  const totalRowIndex=table.length-1;
+  sheet['!merges']=[
+    {s:{r:0,c:0},e:{r:0,c:5}},
+    {s:{r:totalRowIndex,c:1},e:{r:totalRowIndex,c:5}}
+  ];
+  sheet['!cols']=[
+    {wch:6},{wch:22},{wch:12},{wch:6},{wch:22},{wch:12}
+  ];
+  sheet['!rows']=[{hpt:32},{hpt:24}];
+  applyPkExportSheetStyle(sheet,table.length);
   const workbook=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook,sheet,'PK数据');
   XLSX.writeFile(workbook,`${safeFileName(eventName)}_PK数据.xlsx`);
