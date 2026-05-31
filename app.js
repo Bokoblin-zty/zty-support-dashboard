@@ -820,6 +820,8 @@ function initControls(){
   if(specialEvent) specialEvent.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
   const pkExcelEvent=document.getElementById('pkExcelEvent');
   if(pkExcelEvent) pkExcelEvent.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
+  const pkExportEvent=document.getElementById('pkExportEvent');
+  if(pkExportEvent) pkExportEvent.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
   const ruleEventSelect=document.getElementById('ruleEventSelect');
   if(ruleEventSelect){
     ruleEventSelect.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
@@ -1931,6 +1933,29 @@ async function confirmExcelImport(kind){
     await loadAll();
   }
 }
+function safeFileName(text){
+  return String(text||'')
+    .trim()
+    .replace(/[\\/:*?"<>|]/g,'_')
+    .replace(/\s+/g,'_')
+    .slice(0,80) || 'pk';
+}
+function exportPkEventExcel(){
+  const status=document.getElementById('pkImportStatus');
+  const eventName=document.getElementById('pkExportEvent')?.value || '';
+  if(!eventName){if(status) status.textContent='请先选择要导出的 PK 场次'; return;}
+  if(!window.XLSX){if(status) status.textContent='Excel 导出库未加载，请刷新页面后重试'; return;}
+  const rows=aggregateByEventUser(DATA.records,eventName)
+    .filter(r=>r.event_name===eventName && num(r.amount)>0)
+    .sort((a,b)=>num(b.amount)-num(a.amount) || byNameAsc({name:a.user_name},{name:b.user_name}))
+    .map(r=>({ID:r.user_name,金额:num(r.amount)}));
+  if(!rows.length){if(status) status.textContent='该场次暂无可导出的 PK 数据'; return;}
+  const sheet=XLSX.utils.json_to_sheet(rows,{header:['ID','金额']});
+  const workbook=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook,sheet,'PK数据');
+  XLSX.writeFile(workbook,`${safeFileName(eventName)}_PK数据.xlsx`);
+  if(status) status.textContent=`已导出 ${eventName}：${rows.length} 个 ID`;
+}
 document.getElementById('importPkBtn').onclick=async()=>{
   const rows=parseCsv(document.getElementById('pkCsv').value);
   const data=mergePkImportRows(rows.filter(r=>r.length>=3 && !/event/i.test(r[0])).map(r=>({event_name:r[0],user_name:r[1],amount:num(r[2])})));
@@ -2723,6 +2748,8 @@ const applyPkExcelEditBtn=document.getElementById('applyPkExcelEditBtn');
 if(applyPkExcelEditBtn) applyPkExcelEditBtn.onclick=()=>applyExcelPreviewEdits('pk');
 const confirmPkExcelBtn=document.getElementById('confirmPkExcelBtn');
 if(confirmPkExcelBtn) confirmPkExcelBtn.onclick=()=>confirmExcelImport('pk');
+const exportPkEventBtn=document.getElementById('exportPkEventBtn');
+if(exportPkEventBtn) exportPkEventBtn.onclick=exportPkEventExcel;
 const previewBirthExcelBtn=document.getElementById('previewBirthExcelBtn');
 if(previewBirthExcelBtn) previewBirthExcelBtn.onclick=()=>previewOrderExcel('birth');
 const applyBirthExcelEditBtn=document.getElementById('applyBirthExcelEditBtn');

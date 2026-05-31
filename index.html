@@ -270,6 +270,12 @@
         <textarea id="pkCsv" placeholder="event_name,user_name,amount&#10;春日踏青,波克布林,334.8"></textarea>
         <button class="btn good" id="importPkBtn">导入 PK 数据</button>
         <div class="status" id="pkImportStatus"></div>
+        <div class="adminSubhead">导出单场 PK 数据</div>
+        <div class="formGrid adminFilterBar">
+          <select id="pkExportEvent"></select>
+          <button class="btn" id="exportPkEventBtn" type="button">导出 Excel</button>
+        </div>
+        <div class="small">导出的 Excel 只包含 ID 和金额，并按金额从高到低排序。</div>
       </div>
 
       <div class="adminSection" id="birthImportAdmin">
