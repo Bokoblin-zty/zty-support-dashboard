@@ -263,7 +263,7 @@
           <input id="pkExcelFile" type="file" accept=".xlsx,.xls,.csv">
           <button class="btn" id="previewPkExcelBtn" type="button">识别微店订单</button>
         </div>
-        <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只保留“待发货”订单，同一名称会合并金额。</div>
+        <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只排除已取消订单，同一名称会合并金额。</div>
         <div id="pkExcelPreview" class="excelPreview hidden"></div>
         <button class="btn hidden" id="applyPkExcelEditBtn" type="button">应用手动调整</button>
         <button class="btn good hidden" id="confirmPkExcelBtn" type="button">确认导入识别数据</button>
@@ -280,7 +280,7 @@
           <input id="birthExcelFile" type="file" accept=".xlsx,.xls,.csv">
           <button class="btn" id="previewBirthExcelBtn" type="button">识别微店订单</button>
         </div>
-        <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只保留“待发货”订单，同一名称会合并金额。</div>
+        <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只排除已取消订单，同一名称会合并金额。</div>
         <div id="birthExcelPreview" class="excelPreview hidden"></div>
         <button class="btn hidden" id="applyBirthExcelEditBtn" type="button">应用手动调整</button>
         <button class="btn good hidden" id="confirmBirthExcelBtn" type="button">确认导入识别数据</button>

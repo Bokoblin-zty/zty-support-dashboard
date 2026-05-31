@@ -1759,7 +1759,7 @@ function looksLikeStatusHeader(value){
 }
 function isValidOrderStatus(value){
   const text=String(value||'').trim();
-  return /待发货/.test(text);
+  return !/(已取消|取消订单|订单取消|交易关闭|订单关闭|已关闭)/.test(text);
 }
 function parseAmountCell(value){
   if(typeof value === 'number') return value;
@@ -1791,7 +1791,7 @@ function rowsFromWorkbook(workbook){
   return out;
 }
 function extractNameAmountRows(rows){
-  // 只提取待发货订单，并按识别出的收货人与实付金额生成待确认数据。
+  // 提取未取消订单，并按识别出的收货人与实付金额生成待确认数据。
   const header=findHeaderRow(rows);
   if(!header) return [];
   return rows.slice(header.index+1).filter(row=>isValidOrderStatus(row[header.statusCol])).map(row=>({
@@ -1899,7 +1899,7 @@ async function previewOrderExcel(kind){
   if(!file){status.textContent='请先选择微店订单 Excel 文件';return;}
   try{
     const rows=await readExcelRows(file);
-    if(!rows.length){status.textContent='没有识别到待发货订单，请检查表头是否包含名称/买家/收货人、实付/金额和订单状态字段';return;}
+    if(!rows.length){status.textContent='没有识别到可导入订单，请检查表头是否包含名称/买家/收货人、实付/金额和订单状态字段，且订单不全是已取消状态';return;}
     if(isPk){
       const eventName=document.getElementById('pkExcelEvent').value;
       pendingPkExcelRows=rows.map(r=>({event_name:eventName,user_name:r.user_name,amount:r.amount}));
