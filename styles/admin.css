@@ -104,7 +104,8 @@
 .panel .pill.progressDesign{background:#eef2ff;color:#4338ca;border-color:#c7d2fe}
 .panel .pill.progressSample{background:#ecfeff;color:#0e7490;border-color:#a5f3fc}
 .panel .pill.progressProduction{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
-.panel .pill.progressPickup{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+.panel .pill.progressPendingDraw{background:#fefce8;color:#a16207;border-color:#fde68a}
+.panel .pill.progressDrawn{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
 .panel .status{
   font-size:13px;
   line-height:1.5;

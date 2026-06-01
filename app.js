@@ -33,7 +33,7 @@ const REWARD_PROVIDER_TYPES = {
   support_club:'应援会提供',
   zhou_tongyue:'周童玥提供'
 };
-const SUPPORT_CLUB_PROGRESS_STATUSES = ['设计中','打样中','生产中','待领取'];
+const SUPPORT_CLUB_PROGRESS_STATUSES = ['设计中','打样中','生产中','待抽取','已抽取','已完结'];
 const ZHOU_TONGYUE_PROGRESS_STATUSES = ['待兑现','已兑现'];
 const REWARD_PROGRESS_STATUSES = [...SUPPORT_CLUB_PROGRESS_STATUSES, ...ZHOU_TONGYUE_PROGRESS_STATUSES, '已完结'];
 
@@ -433,7 +433,8 @@ function progressStatusClass(status, providerType='support_club'){
     '设计中':'progressDesign',
     '打样中':'progressSample',
     '生产中':'progressProduction',
-    '待领取':'progressPickup',
+    '待抽取':'progressPendingDraw',
+    '已抽取':'progressDrawn',
     '已兑现':'good',
     '已完结':'good'
   }[status] || 'warn';
@@ -543,7 +544,7 @@ async function syncRewardProgressCompleted(rewardName,rewardType=''){
     reward_name:rewardName,
     reward_type:rewardType || rewardOptionMap().get(rewardName)?.reward_type || '其他',
     provider_type:providerType,
-    progress_status:providerType==='zhou_tongyue' ? '已兑现' : '待领取',
+    progress_status:providerType==='zhou_tongyue' ? '已兑现' : '已完结',
     progress_note:null,
     updated_at:new Date().toISOString()
   };
