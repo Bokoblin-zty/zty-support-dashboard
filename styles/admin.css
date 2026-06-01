@@ -42,6 +42,9 @@
 .adminWorkspace{padding:18px;min-width:0}
 .adminSection{display:none}
 .adminSection.active{display:block}
+.adminSection.active{margin-top:16px}
+.adminWorkspace .adminSection.active:first-child{margin-top:0}
+.adminSection{scroll-margin-top:16px}
 .formGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}
 .formGrid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 .adminGroupLabel{display:flex;align-items:center;color:#71809c;font-size:11px;font-weight:900;letter-spacing:.06em;padding:15px 8px 5px;text-transform:uppercase}
@@ -98,6 +101,10 @@
   border-radius:999px;
   font-weight:900;
 }
+.panel .pill.progressDesign{background:#eef2ff;color:#4338ca;border-color:#c7d2fe}
+.panel .pill.progressSample{background:#ecfeff;color:#0e7490;border-color:#a5f3fc}
+.panel .pill.progressProduction{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
+.panel .pill.progressPickup{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
 .panel .status{
   font-size:13px;
   line-height:1.5;
@@ -138,8 +145,10 @@
 .ruleRowsBox{border:1px solid var(--admin-line);border-radius:16px;background:#fff;padding:12px;margin-top:10px}
 .ruleRowsList{max-height:360px;margin-top:8px}
 .ruleTable input{width:100%}
+.ruleTable select{width:100%}
 .ruleTable th,.ruleTable td{text-align:left!important}
 .ruleTable th:last-child,.ruleTable td:last-child{width:92px;text-align:right!important}
+.ruleTable th:nth-child(3),.ruleTable td:nth-child(3){width:150px}
 .inlineCheck{display:flex;align-items:center;gap:7px;border:1px solid var(--admin-line);border-radius:13px;background:#fff;padding:10px 12px;min-height:42px}
 .imageUploadBox{display:grid;gap:7px;border:1px dashed #b7c7e6;border-radius:13px;background:#f7faff;padding:10px 12px}
 .imageUploadBox input{padding:8px;background:#fff}
@@ -148,6 +157,26 @@
 .advancedBox summary{cursor:pointer;font-weight:800;color:var(--admin-accent-dark)}
 .excelPreview{margin:10px 0;border:1px solid var(--admin-line);border-radius:14px;background:#f7faff;padding:10px}
 .excelPreview .list{max-height:280px;margin-top:8px}
+.manualImportBox{
+  border:1px dashed #b7c7e6;
+  border-radius:16px;
+  background:#f7faff;
+  padding:12px;
+  margin:10px 0;
+}
+.manualImportBox .adminSubhead{margin:0 0 8px}
+.rewardBatchBar{margin-top:8px}
+.reward-row-check,
+#rewardSelectAll{
+  width:18px;
+  height:18px;
+  box-shadow:none;
+}
+#rewardAdmin .table th:first-child,
+#rewardAdmin .table td:first-child{
+  width:42px;
+  text-align:center;
+}
 .choiceControl{display:grid;grid-template-columns:minmax(160px,1fr) auto;gap:8px;align-items:center}
 .choiceTable td:last-child{text-align:left}
 .rewardModule{position:relative;overflow:hidden}

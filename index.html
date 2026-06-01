@@ -25,7 +25,7 @@
   </form>
 </div>
 <header class="siteHero">
-  <div class="siteVersion">v1.0 测试版</div>
+  <div class="siteVersion">v1.1 测试版</div>
   <div class="wrap heroInner">
     <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
     <h1 id="title">周童玥应援会数据站</h1>
@@ -135,46 +135,25 @@
 
       <div class="adminShell">
       <div class="tabs">
-        <span class="adminGroupLabel">概览</span>
-        <button class="tab active" data-admin-tab="adminOverview">管理总览</button>
-        <span class="adminGroupLabel">数据管理</span>
-        <button class="tab" data-admin-tab="eventAdmin">总选场次</button>
-        <button class="tab" data-admin-tab="pkImportAdmin">导入总选</button>
-        <button class="tab" data-admin-tab="birthImportAdmin">导入生公</button>
-        <button class="tab" data-admin-tab="aliasAdmin">名称别名</button>
-        <span class="adminGroupLabel">奖励管理</span>
-        <button class="tab" data-admin-tab="rewardAdmin">奖励兑现</button>
-        <button class="tab" data-admin-tab="rewardProgressAdmin">制作进度</button>
-        <button class="tab" data-admin-tab="rewardChoiceAdmin">奖励选择</button>
-        <button class="tab" data-admin-tab="ruleImportAdmin">导入奖励规则</button>
-        <button class="tab" data-admin-tab="specialRankAdmin">特殊排名奖励</button>
-        <button class="tab" data-admin-tab="unfulfilledAdmin">未兑现总表</button>
-        <span class="adminGroupLabel">内容互动</span>
-        <button class="tab" data-admin-tab="announcementAdmin">公告管理</button>
-        <button class="tab" data-admin-tab="lotteryAdmin">抽奖管理</button>
-        <button class="tab" data-admin-tab="questionAdmin">提问回复</button>
-        <span class="adminGroupLabel">系统记录</span>
-        <button class="tab" data-admin-tab="siteSettingsAdmin">系统设置</button>
-        <button class="tab" data-admin-tab="visitStatsAdmin">访问统计</button>
-        <button class="tab" data-admin-tab="operationLogAdmin">操作日志</button>
+        <span class="adminGroupLabel">后台导航</span>
+        <button class="tab active" data-admin-tab="adminOverview">工作台</button>
+        <button class="tab" data-admin-tab="dataAdmin">数据管理</button>
+        <button class="tab" data-admin-tab="rewardCenter">奖励中心</button>
+        <button class="tab" data-admin-tab="contentCenter">内容互动</button>
+        <button class="tab" data-admin-tab="systemCenter">系统记录</button>
       </div>
 
       <div class="adminWorkspace">
-      <div class="adminSection active" id="adminOverview">
-        <h3>管理总览</h3>
-        <div class="adminLead">这里汇总当前数据站的关键状态，便于进入后台后先确认数据、奖励、公告、抽奖和提问是否需要处理。</div>
-        <div class="adminOverviewGrid" id="adminOverviewStats"></div>
+      <div class="adminSection active" id="adminOverview" data-admin-group="adminOverview">
+        <h3>待处理</h3>
+        <div class="adminLead">进入后台后优先查看这里。只保留需要处理的事项，点击卡片可直接跳到对应模块。</div>
         <div class="adminSubhead">待处理入口</div>
         <div class="adminTaskGrid" id="adminTaskGrid">
           <div class="small">打开后台后将自动生成待处理入口。</div>
         </div>
-        <div class="adminSubhead">最近操作</div>
-        <div class="adminOverviewLogs" id="adminOverviewLogs">
-          <div class="small">打开后台后将自动读取最近操作。</div>
-        </div>
       </div>
 
-      <div class="adminSection rewardModule" id="rewardAdmin">
+      <div class="adminSection rewardModule" id="rewardAdmin" data-admin-group="rewardCenter">
         <h3>奖励兑现管理</h3>
         <div class="adminLead">集中处理普通奖励兑现状态。搜索用户、场次或奖励后，可直接标记已兑现或未兑现。</div>
         <div class="adminSubhead">按 ID 快速兑现</div>
@@ -193,21 +172,36 @@
           <input id="rewardDate" type="text" placeholder="兑现日期，例如 5.18">
           <button class="btn" id="reloadRewards">刷新列表</button>
         </div>
-        <div class="small">勾选奖励后会写入 Supabase。若填写日期，将作为兑现日期保存。</div>
-        <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>用户 / 场次 / 奖励</th><th>操作</th></tr></thead><tbody id="rewardAdminBody"></tbody></table></div>
+        <div class="formGrid adminFilterBar rewardBatchBar">
+          <select id="rewardBatchFilter">
+            <option value="visible">选择当前列表</option>
+            <option value="unfulfilled">选择未兑现</option>
+            <option value="fulfilled">选择已兑现</option>
+          </select>
+          <select id="rewardBatchAction">
+            <option value="fulfilled">批量改为已兑现</option>
+            <option value="unfulfilled">批量改为未兑现</option>
+          </select>
+          <button class="btn good" id="applyRewardBatchBtn" type="button">批量更新</button>
+        </div>
+        <div class="small">未兑现会优先显示。批量操作会作用于当前搜索结果，可先搜索某个奖励名称后再批量更新。</div>
+        <div class="list adminTableWrap"><table class="table"><thead><tr><th><input id="rewardSelectAll" type="checkbox" aria-label="选择全部奖励"></th><th>状态</th><th>用户 / 场次 / 奖励</th><th>操作</th></tr></thead><tbody id="rewardAdminBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection rewardModule" id="rewardProgressAdmin">
+      <div class="adminSection rewardModule" id="rewardProgressAdmin" data-admin-group="rewardCenter">
         <h3>奖励制作进度</h3>
         <div class="small">自动列出已导入的奖励名称。这里维护的是奖励整体制作状态，前台用户查询奖励时会同步看到。</div>
         <div class="formGrid">
           <select id="rewardProgressName"></select>
+          <select id="rewardProgressProvider">
+            <option value="support_club">应援会提供</option>
+            <option value="zhou_tongyue">周童玥提供</option>
+          </select>
           <select id="rewardProgressStatus">
             <option>设计中</option>
             <option>打样中</option>
             <option>生产中</option>
-            <option>发放中</option>
-            <option>已完结</option>
+            <option>待领取</option>
           </select>
           <input id="rewardProgressNote" placeholder="进度说明，可空">
         </div>
@@ -219,7 +213,7 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>奖励</th><th>当前进度</th><th>说明</th></tr></thead><tbody id="rewardProgressBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection rewardModule" id="rewardChoiceAdmin">
+      <div class="adminSection rewardModule" id="rewardChoiceAdmin" data-admin-group="rewardCenter">
         <h3>奖励选择管理</h3>
         <div class="adminLead">用于维护二选一或多选一奖励。先选择奖励并填写可选项，再在待选择名单中为每位用户保存具体选择。</div>
         <div class="formGrid">
@@ -244,7 +238,7 @@
         <div class="list adminTableWrap"><table class="table choiceTable"><thead><tr><th>状态</th><th>用户 / 奖励</th><th>选择</th></tr></thead><tbody id="rewardChoiceBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection" id="eventAdmin">
+      <div class="adminSection" id="eventAdmin" data-admin-group="dataAdmin">
         <h3>新增 PK 场次</h3>
         <div class="formGrid adminFilterBar">
           <input id="newEventName" placeholder="场次名称">
@@ -255,7 +249,7 @@
         <div class="status" id="eventAdminStatus"></div>
       </div>
 
-      <div class="adminSection" id="pkImportAdmin">
+      <div class="adminSection" id="pkImportAdmin" data-admin-group="dataAdmin">
         <h3>导入 PK 数据</h3>
         <div class="adminLead">首选上传微店订单 Excel，系统会识别收货人和实付金额；CSV 作为备用导入方式。</div>
         <div class="formGrid">
@@ -265,6 +259,14 @@
         </div>
         <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只排除已取消订单，同一名称会合并金额。</div>
         <div id="pkExcelPreview" class="excelPreview hidden"></div>
+        <div class="manualImportBox">
+          <div class="adminSubhead">手动新增识别行</div>
+          <div class="formGrid adminFilterBar">
+            <input id="manualPkName" list="nameOptions" placeholder="名称 / ID">
+            <input id="manualPkAmount" type="number" step="0.01" placeholder="金额">
+            <button class="btn" id="addManualPkRowBtn" type="button">加入预览表</button>
+          </div>
+        </div>
         <button class="btn hidden" id="applyPkExcelEditBtn" type="button">应用手动调整</button>
         <button class="btn good hidden" id="confirmPkExcelBtn" type="button">确认导入识别数据</button>
         <textarea id="pkCsv" placeholder="event_name,user_name,amount&#10;春日踏青,波克布林,334.8"></textarea>
@@ -278,7 +280,7 @@
         <div class="small">导出的 Excel 会按序号、名称、金额排版，自动分成左右两列，并按金额从高到低排序。</div>
       </div>
 
-      <div class="adminSection" id="birthImportAdmin">
+      <div class="adminSection" id="birthImportAdmin" data-admin-group="dataAdmin">
         <h3>导入生公数据</h3>
         <div class="adminLead">首选上传微店订单 Excel，系统会识别收货人和实付金额；CSV 作为备用导入方式。</div>
         <div class="formGrid">
@@ -288,6 +290,14 @@
         </div>
         <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只排除已取消订单，同一名称会合并金额。</div>
         <div id="birthExcelPreview" class="excelPreview hidden"></div>
+        <div class="manualImportBox">
+          <div class="adminSubhead">手动新增识别行</div>
+          <div class="formGrid adminFilterBar">
+            <input id="manualBirthName" list="nameOptions" placeholder="名称 / ID">
+            <input id="manualBirthAmount" type="number" step="0.01" placeholder="金额">
+            <button class="btn" id="addManualBirthRowBtn" type="button">加入预览表</button>
+          </div>
+        </div>
         <button class="btn hidden" id="applyBirthExcelEditBtn" type="button">应用手动调整</button>
         <button class="btn good hidden" id="confirmBirthExcelBtn" type="button">确认导入识别数据</button>
         <textarea id="birthCsv" placeholder="user_name,amount,batch_name&#10;徐乐迪,50,5.16生公"></textarea>
@@ -295,7 +305,7 @@
         <div class="status" id="birthImportStatus"></div>
       </div>
 
-      <div class="adminSection rewardModule" id="ruleImportAdmin">
+      <div class="adminSection rewardModule" id="ruleImportAdmin" data-admin-group="rewardCenter">
         <h3>导入奖励规则</h3>
         <div class="adminLead">先选择已经创建的 PK 场次，再填写金额门槛和对应奖励。每一行是一档奖励，提交后会同步该场次的奖励规则；删除表格中的已有行并提交，会删除对应旧规则。</div>
         <div class="formGrid two">
@@ -310,7 +320,7 @@
         <div class="status" id="ruleImportStatus"></div>
       </div>
 
-      <div class="adminSection rewardModule" id="specialRankAdmin">
+      <div class="adminSection rewardModule" id="specialRankAdmin" data-admin-group="rewardCenter">
         <h3>特殊排名奖励</h3>
         <div class="small">用于记录由个人/外部提供、按单场排名发放且可能顺延的奖励。普通金额门槛奖励仍由 reward_rules 自动计算。</div>
         <div class="formGrid">
@@ -342,7 +352,7 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>特殊奖励</th><th>操作</th></tr></thead><tbody id="specialRankBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection rewardModule" id="unfulfilledAdmin">
+      <div class="adminSection rewardModule" id="unfulfilledAdmin" data-admin-group="rewardCenter">
         <h3>未兑现奖励名单查询</h3>
         <div class="small">选择 PK 场次和具体奖励，查看该奖励尚未兑现的名单。</div>
         <div class="formGrid adminFilterBar">
@@ -358,7 +368,7 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>排名/类型</th><th>用户 / 奖励</th><th>状态</th></tr></thead><tbody id="unfulfilledBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection" id="aliasAdmin">
+      <div class="adminSection" id="aliasAdmin" data-admin-group="dataAdmin">
         <h3>名称别名管理</h3>
         <div class="adminLead">用于把同一个人的不同写法合并统计。左侧填写订单里出现的写法，右侧填写最终展示和统计使用的统一名称。</div>
         <div class="aliasExample">
@@ -374,7 +384,7 @@
         <div class="status" id="aliasStatus"></div>
       </div>
 
-      <div class="adminSection contentModule" id="announcementAdmin">
+      <div class="adminSection contentModule" id="announcementAdmin" data-admin-group="contentCenter">
         <h3>公告管理</h3>
         <div class="adminLead">用于发布前台公告通知。隐藏公告不会在前台展示，置顶公告会优先显示。</div>
         <input id="announcementTitle" placeholder="公告标题">
@@ -403,7 +413,7 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>公告内容</th><th>操作</th></tr></thead><tbody id="announcementAdminBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection contentModule" id="lotteryAdmin">
+      <div class="adminSection contentModule" id="lotteryAdmin" data-admin-group="contentCenter">
         <h3>抽奖管理</h3>
         <div class="adminLead">自动抽奖会在确认抽选后直接生成记录并锁定结果；手动记录仅用于补录历史抽奖。</div>
         <div class="adminSubhead">自动抽奖</div>
@@ -452,7 +462,7 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>抽奖内容</th><th>操作</th></tr></thead><tbody id="lotteryAdminBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection systemModule" id="operationLogAdmin">
+      <div class="adminSection systemModule" id="operationLogAdmin" data-admin-group="systemCenter">
         <h3>操作日志</h3>
         <div class="adminLead">显示管理员近期导入、抽奖、公告和奖励操作记录，用于回溯后台关键操作。</div>
         <div class="row adminActionRow">
@@ -462,7 +472,7 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>时间</th><th>操作</th><th>详情</th></tr></thead><tbody id="operationLogBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection systemModule" id="visitStatsAdmin">
+      <div class="adminSection systemModule" id="visitStatsAdmin" data-admin-group="systemCenter">
         <h3>访问统计</h3>
         <div class="adminLead">显示前台匿名访问量、模块访问和最近访问时间。统计只用于了解页面使用情况。</div>
         <div class="row adminActionRow">
@@ -476,7 +486,7 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>时间</th><th>模块</th><th>设备 / 访客</th></tr></thead><tbody id="visitLogBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection systemModule" id="siteSettingsAdmin">
+      <div class="adminSection systemModule" id="siteSettingsAdmin" data-admin-group="systemCenter">
         <h3>系统设置</h3>
         <div class="adminLead">这里维护数据站统一访问密码，以及用户输入正确后多久不需要再次输入。</div>
         <div class="formGrid two">
@@ -490,7 +500,7 @@
         <div class="status" id="siteSettingsStatus"></div>
       </div>
 
-      <div class="adminSection contentModule" id="questionAdmin">
+      <div class="adminSection contentModule" id="questionAdmin" data-admin-group="contentCenter">
         <h3>提问回复</h3>
         <div class="adminLead">查看匿名提问并回复。回复后，用户可凭查询码查看回答。</div>
         <div class="row adminActionRow adminFilterBar">

@@ -28,7 +28,14 @@ let state = { view:'overview', event:'', user:null, questionFilter:'pending', re
 let siteSettings = { access_password_hash: DEFAULT_SITE_ACCESS_PASSWORD_HASH, access_ttl_days: DEFAULT_SITE_ACCESS_TTL_DAYS, available:false };
 let pendingPkExcelRows = [];
 let pendingBirthExcelRows = [];
-const REWARD_PROGRESS_STATUSES = ['设计中','打样中','生产中','发放中','已完结'];
+let currentRewardAdminRows = [];
+const REWARD_PROVIDER_TYPES = {
+  support_club:'应援会提供',
+  zhou_tongyue:'周童玥提供'
+};
+const SUPPORT_CLUB_PROGRESS_STATUSES = ['设计中','打样中','生产中','待领取'];
+const ZHOU_TONGYUE_PROGRESS_STATUSES = ['待兑现','已兑现'];
+const REWARD_PROGRESS_STATUSES = [...SUPPORT_CLUB_PROGRESS_STATUSES, ...ZHOU_TONGYUE_PROGRESS_STATUSES, '已完结'];
 
 /* =========================
    工具函数
@@ -157,13 +164,16 @@ async function loadAll(){
     event_name:r.event_name,
     threshold:num(r.threshold),
     reward_name:r.reward_name,
-    sort_order:num(r.sort_order||0)
+    sort_order:num(r.sort_order||0),
+    provider_type:r.provider_type || inferRewardProviderType(r.threshold, r.reward_name)
   }));
   DATA.birthRewardRules = (birthRewardRules.data || []).map(r=>({
+    id:r.id,
     reward_group:r.reward_group,
     threshold:num(r.threshold),
     reward_name:r.reward_name,
-    sort_order:num(r.sort_order||0)
+    sort_order:num(r.sort_order||0),
+    provider_type:r.provider_type || 'support_club'
   })).filter(r=>r.reward_group && r.reward_name);
   DATA.birthRewardStatus = rawBirthRewardStatus.map(r=>({
     ...r,
@@ -174,7 +184,10 @@ async function loadAll(){
   }));
   DATA.announcements = announcements.data || [];
   DATA.lotteryRecords = lotteryRecords.data || [];
-  DATA.rewardProgress = rewardProgress.error ? [] : (rewardProgress.data || []);
+  DATA.rewardProgress = rewardProgress.error ? [] : (rewardProgress.data || []).map(r=>({
+    ...r,
+    provider_type:r.provider_type || inferRewardProviderType(null, r.reward_name)
+  }));
   DATA.rewardChoiceOptions = rewardChoiceOptions.error ? [] : (rewardChoiceOptions.data || []);
   DATA.rewardChoices = rawRewardChoices.map(r=>({...r,user_name:canon(r.user_name)}));
   DATA.specialRankRewards = rawSpecialRankRewards.map(r=>({
@@ -272,7 +285,7 @@ function rewardItemsFor(user,event,amount){
       const st = getRewardStatus(user,event,x.reward_name);
       const fulfilled = !!st?.fulfilled || x.reward_name==="印象瓶";
       const date = st?.fulfilled_date || (x.reward_name==="印象瓶" ? "5.18" : "");
-      return {min:x.threshold, reward:x.reward_name, fulfilled, date};
+      return {min:x.threshold, reward:x.reward_name, fulfilled, date, provider_type:x.provider_type || inferRewardProviderType(x.threshold, x.reward_name)};
     });
 }
 function birthRewardItemsFor(user,amount){
@@ -305,7 +318,8 @@ function birthRewardItemsFor(user,amount){
         highestOnly:isHighestOnlyBirthReward(x),
         fulfilled: !!st?.fulfilled,
         date: st?.fulfilled_date || '',
-        note: st?.note || ''
+        note: st?.note || '',
+        provider_type:x.provider_type || 'support_club'
       };
     });
 }
@@ -314,7 +328,7 @@ function allEarnedRewards(){
   for(const r of aggregateByEventUser(DATA.records)){
     const items = rewardItemsFor(r.user_name, r.event_name, r.amount);
     for(const item of items){
-      out.push({source_type:'pk',user_name:r.user_name,event_name:r.event_name,amount:r.amount,reward_name:item.reward,fulfilled:item.fulfilled,fulfilled_date:item.date});
+      out.push({source_type:'pk',user_name:r.user_name,event_name:r.event_name,amount:r.amount,reward_name:item.reward,fulfilled:item.fulfilled,fulfilled_date:item.date,provider_type:item.provider_type || inferRewardProviderType(item.min,item.reward)});
     }
   }
   return out;
@@ -332,7 +346,8 @@ function allEarnedBirthRewards(){
         reward_name:item.reward,
         fulfilled:item.fulfilled,
         fulfilled_date:item.date,
-        reward_group:item.group || '生公'
+        reward_group:item.group || '生公',
+        provider_type:item.provider_type || 'support_club'
       });
     }
   }
@@ -340,6 +355,18 @@ function allEarnedBirthRewards(){
 }
 function sourceTypeText(type){
   return {pk:'总选',birth:'生公',special:'特殊'}[type] || type || '其他';
+}
+function providerTypeText(type){
+  return REWARD_PROVIDER_TYPES[type] || REWARD_PROVIDER_TYPES.support_club;
+}
+function inferRewardProviderType(threshold, rewardName=''){
+  const n=num(threshold);
+  const name=String(rewardName||'');
+  if(n===322 || n===3.22 || /周童玥提供|小周提供/.test(name)) return 'zhou_tongyue';
+  return 'support_club';
+}
+function statusesForProvider(providerType){
+  return providerType==='zhou_tongyue' ? ZHOU_TONGYUE_PROGRESS_STATUSES : SUPPORT_CLUB_PROGRESS_STATUSES;
 }
 function rewardChoiceKey(sourceType,eventName,rewardName,userName=''){
   return [userName ? canon(userName) : '', sourceType || '', eventName || '', rewardName || ''].join('||');
@@ -400,15 +427,42 @@ function progressForReward(rewardName){
   if(!name) return null;
   return (DATA.rewardProgress || []).find(r=>r.reward_name===name) || null;
 }
+function progressStatusClass(status, providerType='support_club'){
+  if(providerType==='zhou_tongyue') return status==='已兑现' ? 'good' : 'warn';
+  return {
+    '设计中':'progressDesign',
+    '打样中':'progressSample',
+    '生产中':'progressProduction',
+    '待领取':'progressPickup',
+    '已兑现':'good',
+    '已完结':'good'
+  }[status] || 'warn';
+}
+async function upsertRewardProgressPayload(payload){
+  const res=await sb.from('reward_progress').upsert(payload,{onConflict:'reward_name'});
+  if(res.error && /provider_type|column/i.test(res.error.message || '')){
+    const {provider_type, ...fallback}=payload;
+    return sb.from('reward_progress').upsert(fallback,{onConflict:'reward_name'});
+  }
+  return res;
+}
 function renderRewardProgressLine(rewardName){
   const progress=progressForReward(rewardName);
+  const providerType=progress?.provider_type || rewardOptionMap().get(rewardName)?.provider_type || inferRewardProviderType(null,rewardName);
   const status=progress?.progress_status || '暂未更新';
   const note=progress?.progress_note ? `｜${escapeHtml(progress.progress_note)}` : '';
-  return `<div class="small rewardProgressLine">制作进度：<span class="pill ${status==='已完结'?'good':'warn'}">${escapeHtml(status)}</span>${note}</div>`;
+  const label=providerType==='zhou_tongyue' ? '兑现状态' : '制作进度';
+  return `<div class="small rewardProgressLine">${label}：<span class="pill ${progressStatusClass(status, providerType)}">${escapeHtml(status)}</span>${note}</div>`;
+}
+function eventSortIndex(eventName){
+  const event=DATA.events.find(e=>e.event_name===eventName);
+  if(!event) return 9999;
+  const order=num(event.sort_order);
+  return Number.isFinite(order) && order ? order : DATA.events.indexOf(event)+1;
 }
 function rewardOptionMap(){
   const map=new Map();
-  const add=(name,type)=>{
+  const add=(name,type,providerType='support_club',category='其他奖励',sortIndex=9999)=>{
     const reward_name=String(name||'').trim();
     if(!reward_name) return;
     const prev=map.get(reward_name);
@@ -416,36 +470,84 @@ function rewardOptionMap(){
       const types=new Set(String(prev.reward_type||'').split(' / ').filter(Boolean));
       if(type) types.add(type);
       prev.reward_type=[...types].join(' / ');
+      if(prev.provider_type!=='zhou_tongyue') prev.provider_type=providerType || prev.provider_type || 'support_club';
+      if(sortIndex<prev.sort_index){
+        prev.sort_index=sortIndex;
+        prev.category=category;
+      }
     }else{
-      map.set(reward_name,{reward_name,reward_type:type || '其他'});
+      map.set(reward_name,{
+        reward_name,
+        reward_type:type || '其他',
+        provider_type:providerType || inferRewardProviderType(null,reward_name),
+        category,
+        sort_index:sortIndex
+      });
     }
   };
-  DATA.rewardRules.forEach(r=>add(r.reward_name,'总选奖励'));
-  DATA.birthRewardRules.forEach(r=>add(r.reward_name,'生公奖励'));
-  DATA.specialRankRewards.forEach(r=>add(r.reward_name,'特殊排名奖励'));
+  DATA.rewardRules.forEach(r=>add(
+    r.reward_name,
+    `总选奖励｜${r.event_name}`,
+    r.provider_type || inferRewardProviderType(r.threshold,r.reward_name),
+    `总选奖励 / ${r.event_name}`,
+    eventSortIndex(r.event_name)*1000 + num(r.sort_order || r.threshold)
+  ));
+  DATA.birthRewardRules.forEach(r=>add(r.reward_name,'生公奖励',r.provider_type || 'support_club','生公奖励',200000 + num(r.sort_order || r.threshold)));
+  DATA.specialRankRewards.forEach((r,i)=>add(r.reward_name,'特殊排名奖励','support_club','特殊排名奖励',300000 + i));
   DATA.rewardChoiceOptions.forEach(r=>{
-    add(r.reward_name,`${sourceTypeText(r.source_type)}可选奖励`);
-    choiceOptionsArray(r).forEach(option=>add(option,`${sourceTypeText(r.source_type)}具体选项`));
+    const category=`${sourceTypeText(r.source_type)}可选奖励`;
+    add(r.reward_name,category,r.provider_type || 'support_club',category,400000);
+    choiceOptionsArray(r).forEach(option=>add(option,`${sourceTypeText(r.source_type)}具体选项`,r.provider_type || 'support_club',category,400000));
   });
   DATA.rewardChoices.forEach(r=>{
-    if(r.selected_choice) add(r.selected_choice,`${sourceTypeText(r.source_type)}具体选项`);
+    if(r.selected_choice){
+      const category=`${sourceTypeText(r.source_type)}已选奖励`;
+      add(r.selected_choice,`${sourceTypeText(r.source_type)}具体选项`,r.provider_type || 'support_club',category,500000);
+    }
   });
-  DATA.rewardProgress.forEach(r=>add(r.reward_name,r.reward_type || '其他'));
+  DATA.rewardProgress.forEach((r,i)=>add(r.reward_name,r.reward_type || '其他',r.provider_type || inferRewardProviderType(null,r.reward_name),r.reward_type || '其他奖励',600000 + i));
   return map;
 }
+function rewardProgressCategoryOrder(category){
+  if(/^总选奖励/.test(category)) return 1;
+  if(category==='生公奖励') return 2;
+  if(category==='特殊排名奖励') return 3;
+  if(/可选奖励/.test(category)) return 4;
+  if(/已选奖励/.test(category)) return 5;
+  return 9;
+}
 function allRewardProgressOptions(){
-  return [...rewardOptionMap().values()].sort((a,b)=>a.reward_name.localeCompare(b.reward_name,'zh-Hans-CN'));
+  return [...rewardOptionMap().values()].sort((a,b)=>
+    rewardProgressCategoryOrder(a.category)-rewardProgressCategoryOrder(b.category)
+    || num(a.sort_index)-num(b.sort_index)
+    || a.reward_name.localeCompare(b.reward_name,'zh-Hans-CN')
+  );
+}
+function groupedRewardProgressOptions(options){
+  const groups=new Map();
+  options.forEach(item=>{
+    const category=item.category || '其他奖励';
+    if(!groups.has(category)) groups.set(category,[]);
+    groups.get(category).push(item);
+  });
+  return [...groups.entries()].sort((a,b)=>
+    rewardProgressCategoryOrder(a[0])-rewardProgressCategoryOrder(b[0])
+    || num(a[1][0]?.sort_index)-num(b[1][0]?.sort_index)
+    || a[0].localeCompare(b[0],'zh-Hans-CN')
+  );
 }
 async function syncRewardProgressCompleted(rewardName,rewardType=''){
   if(!state.rewardProgressAvailable || !rewardName) return;
+  const providerType=rewardOptionMap().get(rewardName)?.provider_type || inferRewardProviderType(null,rewardName);
   const payload={
     reward_name:rewardName,
     reward_type:rewardType || rewardOptionMap().get(rewardName)?.reward_type || '其他',
-    progress_status:'已完结',
+    provider_type:providerType,
+    progress_status:providerType==='zhou_tongyue' ? '已兑现' : '待领取',
     progress_note:null,
     updated_at:new Date().toISOString()
   };
-  const res=await sb.from('reward_progress').upsert(payload,{onConflict:'reward_name'});
+  const res=await upsertRewardProgressPayload(payload);
   if(res.error){
     state.rewardProgressAvailable=false;
     console.warn('sync reward_progress failed:', res.error);
@@ -1298,24 +1400,44 @@ document.getElementById('loginBtn').onclick=async()=>{
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
+function renderAdminGroup(groupId){
+  if(groupId==='adminOverview') renderAdminOverview();
+  if(groupId==='dataAdmin'){
+    renderRuleRows();
+  }
+  if(groupId==='rewardCenter'){
+    renderAdminRewards();
+    renderRewardProgressAdmin();
+    renderRewardChoiceAdmin();
+    renderSpecialRankAdmin();
+    renderUnfulfilledAdmin();
+  }
+  if(groupId==='contentCenter'){
+    renderAnnouncementAdmin();
+    renderLotteryAdmin();
+    renderQuestionAdmin();
+  }
+  if(groupId==='systemCenter'){
+    renderSiteSettingsAdmin();
+    renderVisitStatsAdmin();
+    renderOperationLogs();
+  }
+}
+
 function setAdminTab(tabId){
-  const tab=document.querySelector(`.tab[data-admin-tab="${tabId}"]`);
-  const section=document.getElementById(tabId);
-  if(!tab || !section) return;
+  const targetSection=document.getElementById(tabId);
+  const groupId=targetSection?.dataset.adminGroup || tabId;
+  const tab=document.querySelector(`.tab[data-admin-tab="${groupId}"]`);
+  const sections=[...document.querySelectorAll(`.adminSection[data-admin-group="${groupId}"]`)];
+  if(!tab || !sections.length) return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.adminSection').forEach(x=>x.classList.remove('active'));
   tab.classList.add('active');
-  section.classList.add('active');
-  if(tabId==='announcementAdmin') renderAnnouncementAdmin();
-  if(tabId==='lotteryAdmin') renderLotteryAdmin();
-  if(tabId==='questionAdmin') renderQuestionAdmin();
-  if(tabId==='operationLogAdmin') renderOperationLogs();
-  if(tabId==='siteSettingsAdmin') renderSiteSettingsAdmin();
-  if(tabId==='visitStatsAdmin') renderVisitStatsAdmin();
-  if(tabId==='rewardProgressAdmin') renderRewardProgressAdmin();
-  if(tabId==='rewardChoiceAdmin') renderRewardChoiceAdmin();
-  if(tabId==='rewardAdmin') renderAdminRewards();
-  if(tabId==='adminOverview') renderAdminOverview();
+  sections.forEach(section=>section.classList.add('active'));
+  renderAdminGroup(groupId);
+  if(targetSection && targetSection.dataset.adminGroup){
+    setTimeout(()=>targetSection.scrollIntoView({block:'start',behavior:'smooth'}),0);
+  }
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setAdminTab(t.dataset.adminTab));
 
@@ -1332,76 +1454,52 @@ if(quickFulfillName) quickFulfillName.onkeydown=e=>{
 };
 
 async function renderAdminOverview(){
-  const stats=document.getElementById('adminOverviewStats');
-  const logs=document.getElementById('adminOverviewLogs');
   const tasks=document.getElementById('adminTaskGrid');
-  if(!stats || !logs) return;
+  if(!tasks) return;
   const normalUnfulfilled=[...allEarnedRewards(), ...allEarnedBirthRewards()].filter(r=>!r.fulfilled).length;
   const specialUnfulfilled=(DATA.specialRankRewards || []).filter(r=>!r.fulfilled).length;
-  const visibleAnnouncementCount=(DATA.announcements || []).filter(a=>a.is_visible !== false).length;
-  const totalRewardCount=allRewardProgressOptions().length;
   const pendingChoices=allChoiceRewardRows().filter(r=>r.choiceInfo?.status==='pending').length;
-  const activeProgress=(DATA.rewardProgress || []).filter(r=>r.progress_status && r.progress_status!=='已完结').length;
+  const activeProgress=(DATA.rewardProgress || []).filter(r=>r.progress_status && !['已兑现','已完结'].includes(r.progress_status)).length;
   let pendingQuestions='-';
   const questionRes=await sb.from('questions').select('answer_text').limit(1000);
   if(!questionRes.error){
     pendingQuestions=(questionRes.data || []).filter(q=>!q.answer_text).length;
   }
-  const cards=[
-    ['总选场次', pkEvents().length, '已创建 PK 场次'],
-    ['总选记录', DATA.records.length, '总选明细'],
-    ['生公记录', DATA.birthRecords.length, '生公明细'],
-    ['未兑现奖励', normalUnfulfilled + specialUnfulfilled, '普通奖励 + 特殊奖励'],
-    ['待选择奖励', pendingChoices, '二选一 / 多选一待处理'],
-    ['待回复提问', pendingQuestions, '匿名提问待处理'],
-    ['前台公告', visibleAnnouncementCount, `全部 ${DATA.announcements.length} 条`],
-    ['抽奖记录', DATA.lotteryRecords.length, '已发布抽奖结果'],
-    ['奖励品类', totalRewardCount, '制作进度可维护项']
+  const taskCards=[
+    ['普通未兑现', normalUnfulfilled, '快速搜索 ID 或批量处理普通奖励', 'rewardAdmin'],
+    ['特殊未兑现', specialUnfulfilled, '检查特殊排名奖励兑现状态', 'specialRankAdmin'],
+    ['待选择奖励', pendingChoices, '为二选一或多选一奖励保存具体选择', 'rewardChoiceAdmin'],
+    ['待回复提问', pendingQuestions, '查看匿名提问并回复用户', 'questionAdmin'],
+    ['制作进度', activeProgress, '更新应援会奖励制作状态', 'rewardProgressAdmin']
   ];
-  stats.innerHTML=cards.map(([label,value,note])=>`<div class="adminOverviewCard"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b><small>${escapeHtml(note)}</small></div>`).join('');
-  if(tasks){
-    const taskCards=[
-      ['普通未兑现', normalUnfulfilled, '检查普通奖励兑现状态', 'rewardAdmin'],
-      ['特殊未兑现', specialUnfulfilled, '检查特殊排名奖励兑现状态', 'specialRankAdmin'],
-      ['待选择奖励', pendingChoices, '为二选一或多选一奖励保存具体选择', 'rewardChoiceAdmin'],
-      ['待回复提问', pendingQuestions, '查看匿名提问并回复用户', 'questionAdmin'],
-      ['制作进度', activeProgress, '更新未完结奖励的制作状态', 'rewardProgressAdmin'],
-      ['发布公告', visibleAnnouncementCount, '新增、编辑、置顶或隐藏前台公告', 'announcementAdmin'],
-      ['抽奖管理', DATA.lotteryRecords.length, '生成奖池、确认抽选或补录抽奖记录', 'lotteryAdmin']
-    ];
-    tasks.innerHTML=taskCards.map(([label,value,note,tabId])=>`
-      <button class="adminTaskCard" type="button" data-admin-target="${escapeHtml(tabId)}">
-        <span>${escapeHtml(label)}</span>
-        <b>${escapeHtml(value)}</b>
-        <small>${escapeHtml(note)}</small>
-      </button>
-    `).join('');
-    tasks.querySelectorAll('.adminTaskCard').forEach(btn=>btn.onclick=()=>setAdminTab(btn.dataset.adminTarget));
-  }
-  logs.innerHTML='<div class="small">正在读取最近操作...</div>';
-  const logRes=await sb.from('operation_logs').select('*').order('created_at',{ascending:false}).limit(5);
-  if(logRes.error){
-    logs.innerHTML=`<div class="small">最近操作读取失败：${escapeHtml(logRes.error.message)}</div>`;
-    return;
-  }
-  logs.innerHTML=(logRes.data || []).map(row=>`<div class="adminLogItem">
-    <div><b>${escapeHtml(row.detail || '-')}</b><div class="small">${escapeHtml(formatDateTime(row.created_at))} ｜ ${escapeHtml(row.admin_email || '-')}</div></div>
-    <span class="pill">${escapeHtml(operationActionLabel(row.action))}</span>
-  </div>`).join('') || '<div class="small">暂无操作日志</div>';
+  tasks.innerHTML=taskCards.map(([label,value,note,tabId])=>`
+    <button class="adminTaskCard" type="button" data-admin-target="${escapeHtml(tabId)}">
+      <span>${escapeHtml(label)}</span>
+      <b>${escapeHtml(value)}</b>
+      <small>${escapeHtml(note)}</small>
+    </button>
+  `).join('');
+  tasks.querySelectorAll('.adminTaskCard').forEach(btn=>btn.onclick=()=>setAdminTab(btn.dataset.adminTarget));
 }
 
 function renderAdminRewards(){
   const kw=(document.getElementById('rewardSearch').value||'').toLowerCase().trim();
   const quickDate=document.getElementById('quickFulfillDate');
   if(quickDate && !quickDate.value) quickDate.value=todayDateText();
-  let rows=allEarnedRewards();
-  rows=rows.filter(r=>!kw || `${r.user_name} ${r.event_name} ${r.reward_name}`.toLowerCase().includes(kw));
+  let rows=[...allEarnedRewards(), ...allEarnedBirthRewards()];
+  rows=rows
+    .filter(r=>!kw || `${r.user_name} ${r.event_name} ${r.reward_name} ${sourceTypeText(r.source_type)}`.toLowerCase().includes(kw))
+    .sort((a,b)=>Number(!!a.fulfilled)-Number(!!b.fulfilled) || `${a.reward_name}${a.event_name}${a.user_name}`.localeCompare(`${b.reward_name}${b.event_name}${b.user_name}`,'zh-Hans-CN'));
+  currentRewardAdminRows=rows;
+  const selectAll=document.getElementById('rewardSelectAll');
+  if(selectAll) selectAll.checked=false;
   document.getElementById('rewardAdminBody').innerHTML=rows.map((r,i)=>`
     <tr>
+      <td><input class="reward-row-check" type="checkbox" data-i="${i}" aria-label="选择 ${escapeHtml(r.user_name)} ${escapeHtml(r.reward_name)}"></td>
       <td>${r.fulfilled?`<span class="pill good">已兑现${r.fulfilled_date?' '+escapeHtml(r.fulfilled_date):''}</span>`:`<span class="pill warn">未兑现</span>`}</td>
-      <td><b>${escapeHtml(r.user_name)}</b><div class="small">${escapeHtml(r.event_name)} ｜ ${fmt(r.amount)} ｜ ${escapeHtml(r.reward_name)}</div>${renderAdminChoiceSummary(r)}</td>
+      <td><b>${escapeHtml(r.user_name)}</b><div class="small">${escapeHtml(sourceTypeText(r.source_type))} ｜ ${escapeHtml(r.event_name)} ｜ ${fmt(r.amount)} ｜ ${escapeHtml(r.reward_name)}</div>${renderAdminChoiceSummary(r)}</td>
       <td><button class="btn ${r.fulfilled?'bad':'good'} reward-toggle" data-i="${i}">${r.fulfilled?'标为未兑现':'标为已兑现'}</button></td>
-    </tr>`).join('') || '<tr><td colspan="3" class="small">暂无奖励数据</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="4" class="small">暂无奖励数据</td></tr>';
   document.querySelectorAll('.reward-toggle').forEach(btn=>btn.onclick=()=>toggleReward(rows[+btn.dataset.i]));
 }
 
@@ -1476,31 +1574,8 @@ async function toggleQuickFulfill(row, button=null){
   }
   if(status) status.textContent=`正在更新：${row.reward_name} - ${row.event_name}`;
   const date=nextFulfilled ? ((document.getElementById('quickFulfillDate')?.value || '').trim() || todayDateText()) : null;
-  let res;
   try{
-    if(row.source_type==='pk'){
-      const payload={user_name:row.user_name,event_name:row.event_name,reward_name:row.reward_name,fulfilled:nextFulfilled,fulfilled_date:date};
-      res=await sb.from('reward_status').upsert(payload,{onConflict:'user_name,event_name,reward_name'});
-      if(!res.error && nextFulfilled){
-        const choice=choiceForUser(row.user_name,row.source_type,row.event_name,row.reward_name);
-        await syncRewardProgressCompleted(choice?.selected_choice || row.reward_name,'总选奖励');
-      }
-      if(!res.error) await logOperation('quick_toggle_reward', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, payload);
-    }else if(row.source_type==='birth'){
-      const payload={user_name:row.user_name,reward_group:row.reward_group || row.event_name || '生公',reward_name:row.reward_name,fulfilled:nextFulfilled,fulfilled_date:date};
-      res=await sb.from('birth_reward_status').upsert(payload,{onConflict:'user_name,reward_group,reward_name'});
-      if(!res.error && nextFulfilled){
-        const choice=choiceForUser(row.user_name,row.source_type,row.event_name,row.reward_name);
-        await syncRewardProgressCompleted(choice?.selected_choice || row.reward_name,'生公奖励');
-      }
-      if(!res.error) await logOperation('quick_toggle_birth_reward', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, payload);
-    }else if(row.source_type==='special'){
-      res=await sb.from('special_rank_rewards').update({fulfilled:nextFulfilled, fulfilled_date:date}).eq('id', row.id);
-      if(!res.error && nextFulfilled){
-        await syncRewardProgressCompleted(row.reward_name,'特殊排名奖励');
-      }
-      if(!res.error) await logOperation('quick_toggle_special_reward', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, {id:row.id,fulfilled:nextFulfilled,fulfilled_date:date});
-    }
+    const res=await saveFulfillmentRow(row,nextFulfilled,date,'quick');
     if(res?.error){
       if(status) status.textContent='保存失败：'+res.error.message;
       if(button){
@@ -1539,18 +1614,68 @@ function renderAdminChoiceSummary(row){
     : `<div class="small">奖励选择：<span class="pill warn">待选择</span></div>`;
 }
 
+async function saveFulfillmentRow(row,nextFulfilled,date,mode='admin'){
+  let res;
+  if(row.source_type==='pk'){
+    const payload={user_name:row.user_name,event_name:row.event_name,reward_name:row.reward_name,fulfilled:nextFulfilled,fulfilled_date:date};
+    res=await sb.from('reward_status').upsert(payload,{onConflict:'user_name,event_name,reward_name'});
+    if(!res.error && nextFulfilled){
+      const choice=choiceForUser(row.user_name,row.source_type,row.event_name,row.reward_name);
+      await syncRewardProgressCompleted(choice?.selected_choice || row.reward_name,'总选奖励');
+    }
+    if(!res.error) await logOperation(mode==='quick'?'quick_toggle_reward':'update_reward_status', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, payload);
+  }else if(row.source_type==='birth'){
+    const payload={user_name:row.user_name,reward_group:row.reward_group || row.event_name || '生公',reward_name:row.reward_name,fulfilled:nextFulfilled,fulfilled_date:date};
+    res=await sb.from('birth_reward_status').upsert(payload,{onConflict:'user_name,reward_group,reward_name'});
+    if(!res.error && nextFulfilled){
+      const choice=choiceForUser(row.user_name,row.source_type,row.event_name,row.reward_name);
+      await syncRewardProgressCompleted(choice?.selected_choice || row.reward_name,'生公奖励');
+    }
+    if(!res.error) await logOperation(mode==='quick'?'quick_toggle_birth_reward':'update_birth_reward_status', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, payload);
+  }else if(row.source_type==='special'){
+    res=await sb.from('special_rank_rewards').update({fulfilled:nextFulfilled, fulfilled_date:date}).eq('id', row.id);
+    if(!res.error && nextFulfilled) await syncRewardProgressCompleted(row.reward_name,'特殊排名奖励');
+    if(!res.error) await logOperation(mode==='quick'?'quick_toggle_special_reward':'update_special_reward_status', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, {id:row.id,fulfilled:nextFulfilled,fulfilled_date:date});
+  }
+  return res;
+}
+
 async function toggleReward(r){
   const newVal=!r.fulfilled;
   const date = newVal ? (document.getElementById('rewardDate').value.trim() || r.fulfilled_date || '') : null;
-  const payload={user_name:r.user_name,event_name:r.event_name,reward_name:r.reward_name,fulfilled:newVal,fulfilled_date:date};
-  const res=await sb.from('reward_status').upsert(payload,{onConflict:'user_name,event_name,reward_name'});
+  const res=await saveFulfillmentRow(r,newVal,date,'admin');
   if(res.error){alert('保存失败：'+res.error.message);return;}
-  if(newVal){
-    const choice=choiceForUser(r.user_name,r.source_type,r.event_name,r.reward_name);
-    await syncRewardProgressCompleted(choice?.selected_choice || r.reward_name,'总选奖励');
-  }
-  await logOperation('update_reward_status', `${r.user_name}｜${r.event_name}｜${r.reward_name}`, payload);
   await loadAll();
+  renderAdminRewards();
+}
+
+function selectedRewardAdminRows(){
+  const checked=[...document.querySelectorAll('.reward-row-check:checked')];
+  return checked.map(input=>currentRewardAdminRows[+input.dataset.i]).filter(Boolean);
+}
+
+async function applyRewardBatch(){
+  const status=document.getElementById('quickFulfillStatus');
+  const filter=document.getElementById('rewardBatchFilter')?.value || 'visible';
+  const action=document.getElementById('rewardBatchAction')?.value || 'fulfilled';
+  const nextFulfilled=action==='fulfilled';
+  let rows=selectedRewardAdminRows();
+  if(!rows.length){
+    rows=[...currentRewardAdminRows];
+    if(filter==='unfulfilled') rows=rows.filter(r=>!r.fulfilled);
+    if(filter==='fulfilled') rows=rows.filter(r=>r.fulfilled);
+  }
+  if(!rows.length){ if(status) status.textContent='没有可批量更新的奖励'; return; }
+  const date=nextFulfilled ? ((document.getElementById('rewardDate')?.value || '').trim() || todayDateText()) : null;
+  if(status) status.textContent=`正在批量更新 ${rows.length} 条奖励...`;
+  const errors=[];
+  for(const row of rows){
+    const res=await saveFulfillmentRow(row,nextFulfilled,date,'batch');
+    if(res?.error) errors.push(res.error.message);
+  }
+  if(status) status.textContent=errors.length ? `批量更新完成，但有 ${errors.length} 条失败：${errors[0]}` : `批量更新完成：${rows.length} 条`;
+  await loadAll();
+  renderAdminRewards();
 }
 
 function renderRewardProgressAdmin(){
@@ -1560,35 +1685,54 @@ function renderRewardProgressAdmin(){
   if(!select || !body) return;
   const options=allRewardProgressOptions();
   const current=select.value;
-  select.innerHTML=options.map(x=>`<option value="${escapeHtml(x.reward_name)}">${escapeHtml(x.reward_name)}${x.reward_type?`｜${escapeHtml(x.reward_type)}`:''}</option>`).join('');
+  select.innerHTML=groupedRewardProgressOptions(options).map(([category,items])=>`
+    <optgroup label="${escapeHtml(category)}">
+      ${items.map(x=>`<option value="${escapeHtml(x.reward_name)}">${escapeHtml(x.reward_name)}${x.reward_type?`｜${escapeHtml(x.reward_type)}`:''}</option>`).join('')}
+    </optgroup>
+  `).join('');
   if(current && options.some(x=>x.reward_name===current)) select.value=current;
   const selected=select.value || options[0]?.reward_name || '';
   const progress=progressForReward(selected);
+  const option=rewardOptionMap().get(selected);
+  const providerType=progress?.provider_type || option?.provider_type || inferRewardProviderType(null,selected);
+  const providerSelect=document.getElementById('rewardProgressProvider');
   const statusSelect=document.getElementById('rewardProgressStatus');
   const noteInput=document.getElementById('rewardProgressNote');
-  if(statusSelect) statusSelect.value=progress?.progress_status || REWARD_PROGRESS_STATUSES[0];
+  if(providerSelect) providerSelect.value=providerType;
+  if(statusSelect) updateRewardProgressStatusOptions(providerType, progress?.progress_status || '');
   if(noteInput) noteInput.value=progress?.progress_note || '';
   if(status) status.textContent=state.rewardProgressAvailable ? '' : '请先在 Supabase 创建 reward_progress 表，创建后刷新页面即可使用。';
   body.innerHTML=options.map(item=>{
     const p=progressForReward(item.reward_name);
+    const itemProvider=p?.provider_type || item.provider_type || inferRewardProviderType(null,item.reward_name);
+    const itemStatus=p?.progress_status || (itemProvider==='zhou_tongyue' ? '待兑现' : '暂未更新');
     return `<tr>
-      <td><b>${escapeHtml(item.reward_name)}</b><div class="small">${escapeHtml(item.reward_type || '其他')}</div></td>
-      <td>${p?`<span class="pill ${p.progress_status==='已完结'?'good':'warn'}">${escapeHtml(p.progress_status || '暂未更新')}</span><div class="small">${p.updated_at?escapeHtml(formatDateTime(p.updated_at)):''}</div>`:'<span class="pill warn">暂未更新</span>'}</td>
+      <td><b>${escapeHtml(item.reward_name)}</b><div class="small">${escapeHtml(item.reward_type || '其他')} ｜ ${escapeHtml(providerTypeText(itemProvider))}</div></td>
+      <td><span class="pill ${progressStatusClass(itemStatus,itemProvider)}">${escapeHtml(itemStatus)}</span><div class="small">${p?.updated_at?escapeHtml(formatDateTime(p.updated_at)):''}</div></td>
       <td>${escapeHtml(p?.progress_note || '-')}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="3" class="small">暂无已导入奖励</td></tr>';
 }
 
+function updateRewardProgressStatusOptions(providerType, currentStatus=''){
+  const statusSelect=document.getElementById('rewardProgressStatus');
+  if(!statusSelect) return;
+  const statuses=statusesForProvider(providerType);
+  statusSelect.innerHTML=statuses.map(x=>`<option>${escapeHtml(x)}</option>`).join('');
+  statusSelect.value=statuses.includes(currentStatus) ? currentStatus : statuses[0];
+}
+
 async function saveRewardProgress(){
   const reward_name=document.getElementById('rewardProgressName')?.value || '';
+  const provider_type=document.getElementById('rewardProgressProvider')?.value || 'support_club';
   const progress_status=document.getElementById('rewardProgressStatus')?.value || '';
   const progress_note=document.getElementById('rewardProgressNote')?.value.trim() || '';
   const status=document.getElementById('rewardProgressStatusText');
   if(!reward_name){status.textContent='暂无可选择的奖励';return;}
-  if(!REWARD_PROGRESS_STATUSES.includes(progress_status)){status.textContent='请选择有效进度';return;}
+  if(!statusesForProvider(provider_type).includes(progress_status)){status.textContent='请选择有效进度';return;}
   const reward_type=rewardOptionMap().get(reward_name)?.reward_type || '其他';
-  const payload={reward_name,reward_type,progress_status,progress_note:progress_note || null,updated_at:new Date().toISOString()};
-  const res=await sb.from('reward_progress').upsert(payload,{onConflict:'reward_name'});
+  const payload={reward_name,reward_type,provider_type,progress_status,progress_note:progress_note || null,updated_at:new Date().toISOString()};
+  const res=await upsertRewardProgressPayload(payload);
   if(res.error){
     state.rewardProgressAvailable=false;
     status.textContent='保存失败：'+res.error.message;
@@ -1892,6 +2036,33 @@ function applyExcelPreviewEdits(kind){
   }
   status.textContent='手动调整已应用，请确认导入';
 }
+function addManualImportRow(kind){
+  const isPk=kind==='pk';
+  const nameInput=document.getElementById(isPk?'manualPkName':'manualBirthName');
+  const amountInput=document.getElementById(isPk?'manualPkAmount':'manualBirthAmount');
+  const status=document.getElementById(isPk?'pkImportStatus':'birthImportStatus');
+  const previewId=isPk?'pkExcelPreview':'birthExcelPreview';
+  const applyBtn=document.getElementById(isPk?'applyPkExcelEditBtn':'applyBirthExcelEditBtn');
+  const confirmBtn=document.getElementById(isPk?'confirmPkExcelBtn':'confirmBirthExcelBtn');
+  const name=canon(nameInput?.value);
+  const amount=num(amountInput?.value);
+  if(!name || !amount){ if(status) status.textContent='请填写有效名称和金额'; return; }
+  const rows=[...readAdjustedPreview(previewId), {user_name:name,amount}];
+  const merged=mergeImportRows(rows);
+  if(isPk){
+    const eventName=document.getElementById('pkExcelEvent').value;
+    pendingPkExcelRows=merged.map(r=>({event_name:eventName,user_name:r.user_name,amount:r.amount}));
+  }else{
+    const batchName=document.getElementById('birthExcelBatch').value.trim();
+    pendingBirthExcelRows=merged.map(r=>({user_name:r.user_name,amount:r.amount,batch_name:batchName}));
+  }
+  renderImportPreview(previewId, merged);
+  applyBtn?.classList.remove('hidden');
+  confirmBtn?.classList.remove('hidden');
+  if(nameInput) nameInput.value='';
+  if(amountInput) amountInput.value='';
+  if(status) status.textContent='已加入预览表，请确认后导入';
+}
 async function previewOrderExcel(kind){
   const isPk=kind==='pk';
   const file=document.getElementById(isPk?'pkExcelFile':'birthExcelFile').files?.[0];
@@ -2036,9 +2207,14 @@ function ruleRowsForEvent(eventName){
     .sort((a,b)=>num(a.sort_order)-num(b.sort_order) || num(a.threshold)-num(b.threshold));
 }
 function ruleRowHtml(row={}, index=0){
+  const provider=row.provider_type || inferRewardProviderType(row.threshold,row.reward_name);
   return `<tr data-rule-id="${escapeHtml(row.id || '')}">
     <td><input class="ruleThresholdInput" type="number" step="0.01" min="0" value="${row.threshold!==undefined?escapeHtml(row.threshold):''}" placeholder="例如 128"></td>
     <td><input class="ruleRewardInput" value="${escapeHtml(row.reward_name || '')}" placeholder="例如 拼豆挂件"></td>
+    <td><select class="ruleProviderInput">
+      <option value="support_club" ${provider==='support_club'?'selected':''}>应援会提供</option>
+      <option value="zhou_tongyue" ${provider==='zhou_tongyue'?'selected':''}>周童玥提供</option>
+    </select></td>
     <td><input class="ruleOrderInput" type="number" step="1" value="${row.sort_order!==undefined?escapeHtml(row.sort_order || index+1):index+1}" placeholder="排序"></td>
     <td><button class="btn bad removeRuleRowBtn" type="button">删除</button></td>
   </tr>`;
@@ -2050,6 +2226,19 @@ function bindRuleRowButtons(){
       if(!document.querySelector('#ruleRowsBox tbody tr')) addRuleRow();
     };
   });
+  document.querySelectorAll('#ruleRowsBox tbody tr').forEach(tr=>{
+    const threshold=tr.querySelector('.ruleThresholdInput');
+    const reward=tr.querySelector('.ruleRewardInput');
+    const provider=tr.querySelector('.ruleProviderInput');
+    const syncProvider=()=>{
+      if(provider && !provider.dataset.manual){
+        provider.value=inferRewardProviderType(threshold?.value,reward?.value);
+      }
+    };
+    if(provider) provider.onchange=()=>{ provider.dataset.manual='1'; };
+    if(threshold) threshold.oninput=syncProvider;
+    if(reward) reward.oninput=syncProvider;
+  });
 }
 function renderRuleRows(){
   const box=document.getElementById('ruleRowsBox');
@@ -2060,7 +2249,7 @@ function renderRuleRows(){
   box.innerHTML=`<div class="small">当前场次：${escapeHtml(eventName || '未选择')}。${existing.length ? `已读取 ${existing.length} 档现有规则，可直接修改后提交。` : '暂无现有规则，可新增后提交。'}</div>
     <div class="list ruleRowsList">
       <table class="table ruleTable">
-        <thead><tr><th>金额门槛</th><th>对应奖励</th><th>排序</th><th>操作</th></tr></thead>
+        <thead><tr><th>金额门槛</th><th>对应奖励</th><th>提供方</th><th>排序</th><th>操作</th></tr></thead>
         <tbody>${rows.map(ruleRowHtml).join('')}</tbody>
       </table>
     </div>`;
@@ -2080,6 +2269,7 @@ function readRuleRows(){
     event_name:eventName,
     threshold:num(tr.querySelector('.ruleThresholdInput')?.value),
     reward_name:String(tr.querySelector('.ruleRewardInput')?.value || '').trim(),
+    provider_type:tr.querySelector('.ruleProviderInput')?.value || inferRewardProviderType(tr.querySelector('.ruleThresholdInput')?.value, tr.querySelector('.ruleRewardInput')?.value),
     sort_order:num(tr.querySelector('.ruleOrderInput')?.value) || i+1
   })).filter(r=>r.event_name && r.reward_name && Number.isFinite(num(r.threshold)) && num(r.threshold)>0);
 }
@@ -2092,7 +2282,7 @@ async function submitRuleRows(){
   const deleteIds=existingIds.filter(id=>!keptIds.includes(id));
   const updates=data.filter(r=>r.id).map(r=>({
     id:r.id,
-    payload:{event_name:r.event_name,threshold:r.threshold,reward_name:r.reward_name,sort_order:r.sort_order}
+    payload:{event_name:r.event_name,threshold:r.threshold,reward_name:r.reward_name,provider_type:r.provider_type,sort_order:r.sort_order}
   }));
   const inserts=data.filter(r=>!r.id).map(({id,...r})=>r);
 
@@ -2102,11 +2292,18 @@ async function submitRuleRows(){
     if(res.error) errors.push(res.error.message);
   }
   for(const item of updates){
-    const res=await sb.from('reward_rules').update(item.payload).eq('id', item.id);
+    let res=await sb.from('reward_rules').update(item.payload).eq('id', item.id);
+    if(res.error && /provider_type|column/i.test(res.error.message || '')){
+      const {provider_type, ...fallback}=item.payload;
+      res=await sb.from('reward_rules').update(fallback).eq('id', item.id);
+    }
     if(res.error) errors.push(res.error.message);
   }
   if(inserts.length){
-    const res=await sb.from('reward_rules').insert(inserts);
+    let res=await sb.from('reward_rules').insert(inserts);
+    if(res.error && /provider_type|column/i.test(res.error.message || '')){
+      res=await sb.from('reward_rules').insert(inserts.map(({provider_type,...row})=>row));
+    }
     if(res.error) errors.push(res.error.message);
   }
   document.getElementById('ruleImportStatus').textContent=errors.length?`提交失败：${errors[0]}`:`提交成功：${data.length} 档奖励规则`;
@@ -2784,6 +2981,8 @@ if(refreshUnfulfilledBtn) refreshUnfulfilledBtn.onclick=renderUnfulfilledAdmin;
 
 const rewardProgressName=document.getElementById('rewardProgressName');
 if(rewardProgressName) rewardProgressName.onchange=renderRewardProgressAdmin;
+const rewardProgressProvider=document.getElementById('rewardProgressProvider');
+if(rewardProgressProvider) rewardProgressProvider.onchange=()=>updateRewardProgressStatusOptions(rewardProgressProvider.value);
 const saveRewardProgressBtn=document.getElementById('saveRewardProgressBtn');
 if(saveRewardProgressBtn) saveRewardProgressBtn.onclick=saveRewardProgress;
 const reloadRewardProgressBtn=document.getElementById('reloadRewardProgressBtn');
@@ -2805,6 +3004,8 @@ const applyPkExcelEditBtn=document.getElementById('applyPkExcelEditBtn');
 if(applyPkExcelEditBtn) applyPkExcelEditBtn.onclick=()=>applyExcelPreviewEdits('pk');
 const confirmPkExcelBtn=document.getElementById('confirmPkExcelBtn');
 if(confirmPkExcelBtn) confirmPkExcelBtn.onclick=()=>confirmExcelImport('pk');
+const addManualPkRowBtn=document.getElementById('addManualPkRowBtn');
+if(addManualPkRowBtn) addManualPkRowBtn.onclick=()=>addManualImportRow('pk');
 const exportPkEventBtn=document.getElementById('exportPkEventBtn');
 if(exportPkEventBtn) exportPkEventBtn.onclick=exportPkEventExcel;
 const previewBirthExcelBtn=document.getElementById('previewBirthExcelBtn');
@@ -2813,6 +3014,15 @@ const applyBirthExcelEditBtn=document.getElementById('applyBirthExcelEditBtn');
 if(applyBirthExcelEditBtn) applyBirthExcelEditBtn.onclick=()=>applyExcelPreviewEdits('birth');
 const confirmBirthExcelBtn=document.getElementById('confirmBirthExcelBtn');
 if(confirmBirthExcelBtn) confirmBirthExcelBtn.onclick=()=>confirmExcelImport('birth');
+const addManualBirthRowBtn=document.getElementById('addManualBirthRowBtn');
+if(addManualBirthRowBtn) addManualBirthRowBtn.onclick=()=>addManualImportRow('birth');
+
+const rewardSelectAll=document.getElementById('rewardSelectAll');
+if(rewardSelectAll) rewardSelectAll.onchange=()=>{
+  document.querySelectorAll('.reward-row-check').forEach(input=>{input.checked=rewardSelectAll.checked;});
+};
+const applyRewardBatchBtn=document.getElementById('applyRewardBatchBtn');
+if(applyRewardBatchBtn) applyRewardBatchBtn.onclick=applyRewardBatch;
 
 const addRuleRowBtn=document.getElementById('addRuleRowBtn');
 if(addRuleRowBtn) addRuleRowBtn.onclick=addRuleRow;
@@ -2824,7 +3034,7 @@ if(resetRuleRowsBtn) resetRuleRowsBtn.onclick=()=>{
     box.innerHTML=`<div class="small">当前场次：${escapeHtml(eventName || '未选择')}。已清空，请重新填写。</div>
       <div class="list ruleRowsList">
         <table class="table ruleTable">
-          <thead><tr><th>金额门槛</th><th>对应奖励</th><th>排序</th><th>操作</th></tr></thead>
+          <thead><tr><th>金额门槛</th><th>对应奖励</th><th>提供方</th><th>排序</th><th>操作</th></tr></thead>
           <tbody>${ruleRowHtml({sort_order:1},0)}</tbody>
         </table>
       </div>`;
