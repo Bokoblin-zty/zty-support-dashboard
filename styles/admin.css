@@ -106,6 +106,7 @@
 .panel .pill.progressProduction{background:#fff7ed;color:#c2410c;border-color:#fed7aa}
 .panel .pill.progressPendingDraw{background:#fefce8;color:#a16207;border-color:#fde68a}
 .panel .pill.progressDrawn{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+.panel .pill.progressPickup{background:#f5f3ff;color:#6d28d9;border-color:#ddd6fe}
 .panel .status{
   font-size:13px;
   line-height:1.5;

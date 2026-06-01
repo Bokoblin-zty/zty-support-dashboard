@@ -33,7 +33,7 @@ const REWARD_PROVIDER_TYPES = {
   support_club:'应援会提供',
   zhou_tongyue:'周童玥提供'
 };
-const SUPPORT_CLUB_PROGRESS_STATUSES = ['设计中','打样中','生产中','待抽取','已抽取','已完结'];
+const SUPPORT_CLUB_PROGRESS_STATUSES = ['设计中','打样中','生产中','待抽取','已抽取','待领取','已完结'];
 const ZHOU_TONGYUE_PROGRESS_STATUSES = ['待兑现','已兑现'];
 const REWARD_PROGRESS_STATUSES = [...SUPPORT_CLUB_PROGRESS_STATUSES, ...ZHOU_TONGYUE_PROGRESS_STATUSES, '已完结'];
 
@@ -435,6 +435,7 @@ function progressStatusClass(status, providerType='support_club'){
     '生产中':'progressProduction',
     '待抽取':'progressPendingDraw',
     '已抽取':'progressDrawn',
+    '待领取':'progressPickup',
     '已兑现':'good',
     '已完结':'good'
   }[status] || 'warn';
