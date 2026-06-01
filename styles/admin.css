@@ -146,11 +146,14 @@
 .aliasArrow{color:var(--admin-accent-dark);font-weight:900}
 .ruleRowsBox{border:1px solid var(--admin-line);border-radius:16px;background:#fff;padding:12px;margin-top:10px}
 .ruleRowsList{max-height:360px;margin-top:8px}
-.ruleTable input{width:100%}
+.ruleTable input,
+.ruleTable textarea{width:100%}
 .ruleTable select{width:100%}
+.ruleTable textarea{min-height:58px;resize:vertical}
 .ruleTable th,.ruleTable td{text-align:left!important}
 .ruleTable th:last-child,.ruleTable td:last-child{width:92px;text-align:right!important}
-.ruleTable th:nth-child(3),.ruleTable td:nth-child(3){width:150px}
+.ruleTable th:nth-child(3),.ruleTable td:nth-child(3){width:210px}
+.ruleTable th:nth-child(4),.ruleTable td:nth-child(4){width:150px}
 .inlineCheck{display:flex;align-items:center;gap:7px;border:1px solid var(--admin-line);border-radius:13px;background:#fff;padding:10px 12px;min-height:42px}
 .imageUploadBox{display:grid;gap:7px;border:1px dashed #b7c7e6;border-radius:13px;background:#f7faff;padding:10px 12px}
 .imageUploadBox input{padding:8px;background:#fff}

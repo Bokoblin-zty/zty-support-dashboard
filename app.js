@@ -382,10 +382,21 @@ function choiceOptionsArray(row){
   }
   return [];
 }
+function inferredChoiceOptionsFromRewardName(rewardName){
+  const text=String(rewardName||'').trim();
+  if(!text) return [];
+  if(!/[\/｜|、，,；;]|\b或\b|或|二选一|多选一|任选其一/.test(text)) return [];
+  const options=parseChoiceOptionsText(text);
+  if(options.length<2) return [];
+  return options.filter(x=>x!==text);
+}
 function choiceOptionFor(sourceType,eventName,rewardName){
   const rows=DATA.rewardChoiceOptions || [];
   return rows.find(r=>r.source_type===sourceType && (r.event_name||'')===(eventName||'') && r.reward_name===rewardName)
     || rows.find(r=>r.source_type===sourceType && !(r.event_name||'') && r.reward_name===rewardName)
+    || (inferredChoiceOptionsFromRewardName(rewardName).length>=2
+      ? {source_type:sourceType,event_name:eventName || '',reward_name:rewardName,choice_options:inferredChoiceOptionsFromRewardName(rewardName),is_choice_required:true,note:'自动识别'}
+      : null)
     || null;
 }
 function choiceForUser(userName,sourceType,eventName,rewardName){
@@ -440,7 +451,10 @@ function choiceProgressPill(row){
   const state=choiceProgressState(row);
   if(state==='pending') return '<span class="pill warn">待选择</span>';
   if(state==='needs_progress') return '<span class="pill warn">待编辑</span>';
-  return '<span class="pill good">已设置进度</span>';
+  const selected=row?.choiceInfo?.selected || '';
+  const progress=progressForReward(selected);
+  const providerType=progress?.provider_type || rewardOptionMap().get(selected)?.provider_type || inferRewardProviderType(null,selected);
+  return `<span class="pill ${progressStatusClass(progress?.progress_status,providerType)}">${escapeHtml(progress?.progress_status || '已设置进度')}</span>`;
 }
 function progressStatusClass(status, providerType='support_club'){
   if(providerType==='zhou_tongyue') return status==='已兑现' ? 'good' : 'warn';
@@ -477,8 +491,21 @@ function eventSortIndex(eventName){
   const order=num(event.sort_order);
   return Number.isFinite(order) && order ? order : DATA.events.indexOf(event)+1;
 }
+function choiceParentRewardNames(){
+  const names=new Set();
+  const addIfChoice=(sourceType,eventName,rewardName)=>{
+    const option=choiceOptionFor(sourceType,eventName,rewardName);
+    if(choiceOptionsArray(option).length>=2) names.add(String(rewardName||'').trim());
+  };
+  DATA.rewardRules.forEach(r=>addIfChoice('pk',r.event_name,r.reward_name));
+  DATA.birthRewardRules.forEach(r=>addIfChoice('birth',r.reward_group || '生公',r.reward_name));
+  DATA.specialRankRewards.forEach(r=>addIfChoice('special',r.event_name || '特殊',r.reward_name));
+  DATA.rewardChoiceOptions.forEach(r=>names.add(String(r.reward_name||'').trim()));
+  return names;
+}
 function rewardOptionMap(){
   const map=new Map();
+  const choiceParents=choiceParentRewardNames();
   const add=(name,type,providerType='support_club',category='其他奖励',sortIndex=9999)=>{
     const reward_name=String(name||'').trim();
     if(!reward_name) return;
@@ -502,18 +529,27 @@ function rewardOptionMap(){
       });
     }
   };
-  DATA.rewardRules.forEach(r=>add(
-    r.reward_name,
-    `总选奖励｜${r.event_name}`,
-    r.provider_type || inferRewardProviderType(r.threshold,r.reward_name),
-    `总选奖励 / ${r.event_name}`,
-    eventSortIndex(r.event_name)*1000 + num(r.sort_order || r.threshold)
-  ));
-  DATA.birthRewardRules.forEach(r=>add(r.reward_name,'生公奖励',r.provider_type || 'support_club','生公奖励',200000 + num(r.sort_order || r.threshold)));
+  DATA.rewardRules.forEach(r=>{
+    const provider=r.provider_type || inferRewardProviderType(r.threshold,r.reward_name);
+    const category=`总选奖励 / ${r.event_name}`;
+    const sortIndex=eventSortIndex(r.event_name)*1000 + num(r.sort_order || r.threshold);
+    const options=choiceOptionsArray(choiceOptionFor('pk',r.event_name,r.reward_name));
+    if(options.length<2) add(r.reward_name,`总选奖励｜${r.event_name}`,provider,category,sortIndex);
+    options.forEach(option=>{
+      add(option,`总选具体选项｜${r.event_name}`,provider,category,sortIndex+0.1);
+    });
+  });
+  DATA.birthRewardRules.forEach(r=>{
+    const sortIndex=200000 + num(r.sort_order || r.threshold);
+    const options=choiceOptionsArray(choiceOptionFor('birth',r.reward_group || '生公',r.reward_name));
+    if(options.length<2) add(r.reward_name,'生公奖励',r.provider_type || 'support_club','生公奖励',sortIndex);
+    options.forEach(option=>{
+      add(option,'生公具体选项',r.provider_type || 'support_club','生公奖励',sortIndex+0.1);
+    });
+  });
   DATA.specialRankRewards.forEach((r,i)=>add(r.reward_name,'特殊排名奖励','support_club','特殊排名奖励',300000 + i));
   DATA.rewardChoiceOptions.forEach(r=>{
     const category=`${sourceTypeText(r.source_type)}可选奖励`;
-    add(r.reward_name,category,r.provider_type || 'support_club',category,400000);
     choiceOptionsArray(r).forEach(option=>add(option,`${sourceTypeText(r.source_type)}具体选项`,r.provider_type || 'support_club',category,400000));
   });
   DATA.rewardChoices.forEach(r=>{
@@ -522,7 +558,10 @@ function rewardOptionMap(){
       add(r.selected_choice,`${sourceTypeText(r.source_type)}具体选项`,r.provider_type || 'support_club',category,500000);
     }
   });
-  DATA.rewardProgress.forEach((r,i)=>add(r.reward_name,r.reward_type || '其他',r.provider_type || inferRewardProviderType(null,r.reward_name),r.reward_type || '其他奖励',600000 + i));
+  DATA.rewardProgress.forEach((r,i)=>{
+    if(choiceParents.has(String(r.reward_name||'').trim())) return;
+    add(r.reward_name,r.reward_type || '其他',r.provider_type || inferRewardProviderType(null,r.reward_name),r.reward_type || '其他奖励',600000 + i);
+  });
   return map;
 }
 function rewardProgressCategoryOrder(category){
@@ -1818,7 +1857,7 @@ function renderRewardChoiceAdmin(){
     if(selected) selectOptions.unshift(selected);
     return `<tr>
       <td>${choiceProgressPill(r)}<div class="small">${escapeHtml(sourceTypeText(r.source_type))}</div></td>
-      <td><b>${escapeHtml(r.user_name)}</b><div class="small">${escapeHtml(r.event_name || '-')} ｜ ${escapeHtml(r.reward_name)}</div>${selected?`<div class="small">已选择：${escapeHtml(selected)}</div>`:''}</td>
+      <td><b>${escapeHtml(r.user_name)}</b><div class="small">${escapeHtml(r.event_name || '-')} ｜ ${escapeHtml(r.reward_name)}</div>${selected?`<div class="small">已选择：${escapeHtml(selected)} ｜ 当前状态：${choiceProgressPill(r)}</div>`:''}</td>
       <td>
         <div class="choiceControl">
           <select class="reward-choice-select" data-i="${i}">
@@ -2228,9 +2267,12 @@ function ruleRowsForEvent(eventName){
 }
 function ruleRowHtml(row={}, index=0){
   const provider=row.provider_type || inferRewardProviderType(row.threshold,row.reward_name);
+  const choiceOption=choiceOptionFor('pk', row.event_name || document.getElementById('ruleEventSelect')?.value || '', row.reward_name);
+  const choiceText=choiceOptionsArray(choiceOption).join(' / ');
   return `<tr data-rule-id="${escapeHtml(row.id || '')}">
     <td><input class="ruleThresholdInput" type="number" step="0.01" min="0" value="${row.threshold!==undefined?escapeHtml(row.threshold):''}" placeholder="例如 128"></td>
     <td><input class="ruleRewardInput" value="${escapeHtml(row.reward_name || '')}" placeholder="例如 拼豆挂件"></td>
+    <td><textarea class="ruleChoiceInput" placeholder="可空；例如 A款 / B款，或一行一个">${escapeHtml(choiceText)}</textarea></td>
     <td><select class="ruleProviderInput">
       <option value="support_club" ${provider==='support_club'?'selected':''}>应援会提供</option>
       <option value="zhou_tongyue" ${provider==='zhou_tongyue'?'selected':''}>周童玥提供</option>
@@ -2267,10 +2309,10 @@ function renderRuleRows(){
   const existing=ruleRowsForEvent(eventName);
   const rows=existing.length ? existing : [{threshold:'',reward_name:'',sort_order:1}];
   box.innerHTML=`<div class="small">当前场次：${escapeHtml(eventName || '未选择')}。${existing.length ? `已读取 ${existing.length} 档现有规则，可直接修改后提交。` : '暂无现有规则，可新增后提交。'}</div>
-    <div class="list ruleRowsList">
-      <table class="table ruleTable">
-        <thead><tr><th>金额门槛</th><th>对应奖励</th><th>提供方</th><th>排序</th><th>操作</th></tr></thead>
-        <tbody>${rows.map(ruleRowHtml).join('')}</tbody>
+      <div class="list ruleRowsList">
+        <table class="table ruleTable">
+          <thead><tr><th>金额门槛</th><th>对应奖励</th><th>可选奖励</th><th>提供方</th><th>排序</th><th>操作</th></tr></thead>
+          <tbody>${rows.map(ruleRowHtml).join('')}</tbody>
       </table>
     </div>`;
   bindRuleRowButtons();
@@ -2289,9 +2331,50 @@ function readRuleRows(){
     event_name:eventName,
     threshold:num(tr.querySelector('.ruleThresholdInput')?.value),
     reward_name:String(tr.querySelector('.ruleRewardInput')?.value || '').trim(),
+    choice_options:parseChoiceOptionsText(tr.querySelector('.ruleChoiceInput')?.value || ''),
     provider_type:tr.querySelector('.ruleProviderInput')?.value || inferRewardProviderType(tr.querySelector('.ruleThresholdInput')?.value, tr.querySelector('.ruleRewardInput')?.value),
     sort_order:num(tr.querySelector('.ruleOrderInput')?.value) || i+1
   })).filter(r=>r.event_name && r.reward_name && Number.isFinite(num(r.threshold)) && num(r.threshold)>0);
+}
+function parseChoiceOptionsText(text){
+  const normalized=String(text||'')
+    .replace(/[｜|]/g,'/')
+    .replace(/或/g,'/')
+    .replace(/任选其一/g,'/')
+    .replace(/二选一/g,'/')
+    .replace(/多选一/g,'/');
+  const options=normalized
+    .split(/[\n\r/、，,；;]+/)
+    .map(x=>x.trim())
+    .filter(Boolean);
+  return [...new Set(options)];
+}
+async function syncRuleChoiceOptions(data){
+  const errors=[];
+  for(const row of data){
+    const options=row.choice_options || [];
+    if(options.length>=2){
+      const payload={
+        source_type:'pk',
+        event_name:row.event_name,
+        reward_name:row.reward_name,
+        choice_options:options,
+        is_choice_required:true,
+        note:'由奖励规则导入自动生成',
+        updated_at:new Date().toISOString()
+      };
+      const res=await sb.from('reward_choice_options').upsert(payload,{onConflict:'source_type,event_name,reward_name'});
+      if(res.error) errors.push(res.error.message);
+    }else{
+      const res=await sb.from('reward_choice_options')
+        .delete()
+        .eq('source_type','pk')
+        .eq('event_name',row.event_name)
+        .eq('reward_name',row.reward_name);
+      if(res.error) errors.push(res.error.message);
+    }
+  }
+  return errors;
 }
 async function submitRuleRows(){
   const data=readRuleRows();
@@ -2304,7 +2387,7 @@ async function submitRuleRows(){
     id:r.id,
     payload:{event_name:r.event_name,threshold:r.threshold,reward_name:r.reward_name,provider_type:r.provider_type,sort_order:r.sort_order}
   }));
-  const inserts=data.filter(r=>!r.id).map(({id,...r})=>r);
+  const inserts=data.filter(r=>!r.id).map(({id,choice_options,...r})=>r);
 
   const errors=[];
   for(const id of deleteIds){
@@ -2325,6 +2408,9 @@ async function submitRuleRows(){
       res=await sb.from('reward_rules').insert(inserts.map(({provider_type,...row})=>row));
     }
     if(res.error) errors.push(res.error.message);
+  }
+  if(!errors.length){
+    errors.push(...await syncRuleChoiceOptions(data));
   }
   document.getElementById('ruleImportStatus').textContent=errors.length?`提交失败：${errors[0]}`:`提交成功：${data.length} 档奖励规则`;
   if(!errors.length){await logOperation('import_reward_rules', `提交 ${data.length} 档`, {count:data.length,event_name:eventName}); await loadAll();}
@@ -3054,7 +3140,7 @@ if(resetRuleRowsBtn) resetRuleRowsBtn.onclick=()=>{
     box.innerHTML=`<div class="small">当前场次：${escapeHtml(eventName || '未选择')}。已清空，请重新填写。</div>
       <div class="list ruleRowsList">
         <table class="table ruleTable">
-          <thead><tr><th>金额门槛</th><th>对应奖励</th><th>提供方</th><th>排序</th><th>操作</th></tr></thead>
+          <thead><tr><th>金额门槛</th><th>对应奖励</th><th>可选奖励</th><th>提供方</th><th>排序</th><th>操作</th></tr></thead>
           <tbody>${ruleRowHtml({sort_order:1},0)}</tbody>
         </table>
       </div>`;
