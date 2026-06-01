@@ -411,7 +411,7 @@ function renderRewardChoiceLine(userName,sourceType,eventName,rewardName){
   const info=rewardChoiceInfo(userName,sourceType,eventName,rewardName);
   if(!info) return renderRewardProgressLine(rewardName);
   if(!info.selected){
-    return `<div class="small rewardProgressLine">选择状态：<span class="pill warn">未选择</span></div><div class="small rewardProgressLine">制作进度：<span class="pill warn">待选择</span></div>`;
+    return `<div class="small rewardProgressLine">选择状态：<span class="pill warn">待选择</span></div><div class="small rewardProgressLine">制作进度：<span class="pill warn">待选择</span></div>`;
   }
   const progress=progressForReward(info.selected);
   const progressLine=progress
@@ -438,7 +438,7 @@ function choiceProgressState(row){
 }
 function choiceProgressPill(row){
   const state=choiceProgressState(row);
-  if(state==='pending') return '<span class="pill warn">未选择</span>';
+  if(state==='pending') return '<span class="pill warn">待选择</span>';
   if(state==='needs_progress') return '<span class="pill warn">待编辑</span>';
   return '<span class="pill good">已设置进度</span>';
 }
@@ -1626,7 +1626,7 @@ async function toggleQuickFulfill(row, button=null){
 function renderAdminChoiceSummary(row){
   const info=rewardChoiceInfo(row.user_name,row.source_type,row.event_name,row.reward_name);
   if(!info) return '';
-  if(!info.selected) return `<div class="small">奖励选择：<span class="pill warn">未选择</span></div>`;
+  if(!info.selected) return `<div class="small">奖励选择：<span class="pill warn">待选择</span></div>`;
   const progress=progressForReward(info.selected);
   return info.selected
     ? `<div class="small">奖励选择：<span class="pill good">${escapeHtml(info.selected)}</span> ${progress?'<span class="pill good">已设置进度</span>':'<span class="pill warn">待编辑</span>'}</div>`
@@ -1822,7 +1822,7 @@ function renderRewardChoiceAdmin(){
       <td>
         <div class="choiceControl">
           <select class="reward-choice-select" data-i="${i}">
-            ${selectOptions.map(x=>`<option value="${escapeHtml(x)}"${x===selected?' selected':''}>${x?escapeHtml(x):'未选择'}</option>`).join('')}
+            ${selectOptions.map(x=>`<option value="${escapeHtml(x)}"${x===selected?' selected':''}>${x?escapeHtml(x):'待选择'}</option>`).join('')}
           </select>
           <button class="btn good reward-choice-save" data-i="${i}" type="button">保存选择</button>
         </div>
@@ -1872,8 +1872,8 @@ async function saveRewardChoice(row, selected=''){
   const res=await sb.from('reward_choices').upsert(payload,{onConflict:'user_name,source_type,event_name,reward_name'});
   if(res.error){if(status) status.textContent='保存失败：'+res.error.message; return;}
   if(selected && row.fulfilled) await syncRewardProgressCompleted(selected,`${sourceTypeText(row.source_type)}具体选项`);
-  if(status) status.textContent=selected ? `已保存选择：${selected}，请到奖励制作进度中维护该具体奖励状态` : '已标记为未选择';
-  await logOperation('update_reward_choice', `${row.user_name}｜${row.reward_name}｜${selected || '未选择'}`, payload);
+  if(status) status.textContent=selected ? `已保存选择：${selected}，请到奖励制作进度中维护该具体奖励状态` : '已标记为待选择';
+  await logOperation('update_reward_choice', `${row.user_name}｜${row.reward_name}｜${selected || '待选择'}`, payload);
   await loadAll();
 }
 
