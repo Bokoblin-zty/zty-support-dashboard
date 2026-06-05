@@ -2195,23 +2195,14 @@ function applyPkExportSheetStyle(sheet,totalRows){
     }
   }
 }
-function exportPkEventExcel(){
-  const status=document.getElementById('pkImportStatus');
-  const eventName=document.getElementById('pkExportEvent')?.value || '';
-  if(!eventName){if(status) status.textContent='请先选择要导出的 PK 场次'; return;}
-  if(!window.XLSX){if(status) status.textContent='Excel 导出库未加载，请刷新页面后重试'; return;}
-  const rows=aggregateByEventUser(DATA.records,eventName)
-    .filter(r=>r.event_name===eventName && num(r.amount)>0)
-    .sort((a,b)=>num(b.amount)-num(a.amount) || byNameAsc({name:a.user_name},{name:b.user_name}))
-    .map((r,index)=>({rank:index+1,name:r.user_name,amount:num(r.amount)}));
-  if(!rows.length){if(status) status.textContent='该场次暂无可导出的 PK 数据'; return;}
+function exportRankedTwoColumnExcel({title,rows,fileName,sheetName='数据',statusEl}){
   const splitAt=rows.length<=40 ? Math.min(20,rows.length) : Math.ceil(rows.length/2);
   const leftRows=rows.slice(0,splitAt);
   const rightRows=rows.slice(splitAt);
   const bodyRows=Math.max(leftRows.length,rightRows.length,20);
   const total=rows.reduce((sum,row)=>sum+num(row.amount),0);
   const table=[
-    [`${eventName}PK数据`,'','','','',''],
+    [title,'','','','',''],
     ['序号','名称','金额','序号','名称','金额']
   ];
   for(let i=0;i<bodyRows;i++){
@@ -2239,9 +2230,44 @@ function exportPkEventExcel(){
   sheet['!rows']=[{hpt:32},{hpt:24}];
   applyPkExportSheetStyle(sheet,table.length);
   const workbook=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook,sheet,'PK数据');
-  XLSX.writeFile(workbook,`${safeFileName(eventName)}_PK数据.xlsx`);
+  XLSX.utils.book_append_sheet(workbook,sheet,sheetName);
+  XLSX.writeFile(workbook,`${safeFileName(fileName)}.xlsx`);
+  if(statusEl) statusEl.textContent=`已导出 ${title}：${rows.length} 个 ID`;
+}
+function exportPkEventExcel(){
+  const status=document.getElementById('pkImportStatus');
+  const eventName=document.getElementById('pkExportEvent')?.value || '';
+  if(!eventName){if(status) status.textContent='请先选择要导出的 PK 场次'; return;}
+  if(!window.XLSX){if(status) status.textContent='Excel 导出库未加载，请刷新页面后重试'; return;}
+  const rows=aggregateByEventUser(DATA.records,eventName)
+    .filter(r=>r.event_name===eventName && num(r.amount)>0)
+    .sort((a,b)=>num(b.amount)-num(a.amount) || byNameAsc({name:a.user_name},{name:b.user_name}))
+    .map((r,index)=>({rank:index+1,name:r.user_name,amount:num(r.amount)}));
+  if(!rows.length){if(status) status.textContent='该场次暂无可导出的 PK 数据'; return;}
+  exportRankedTwoColumnExcel({
+    title:`${eventName}PK数据`,
+    rows,
+    fileName:`${eventName}_PK数据`,
+    sheetName:'PK数据',
+    statusEl:status
+  });
   if(status) status.textContent=`已导出 ${eventName}：${rows.length} 个 ID`;
+}
+function exportBirthDataExcel(){
+  const status=document.getElementById('birthImportStatus');
+  if(!window.XLSX){if(status) status.textContent='Excel 导出库未加载，请刷新页面后重试'; return;}
+  const rows=birthByUser()
+    .filter(r=>num(r.total)>0)
+    .sort((a,b)=>num(b.total)-num(a.total) || byNameAsc(a,b))
+    .map((r,index)=>({rank:index+1,name:r.name,amount:num(r.total)}));
+  if(!rows.length){if(status) status.textContent='暂无可导出的生公数据'; return;}
+  exportRankedTwoColumnExcel({
+    title:'生公数据',
+    rows,
+    fileName:'生公数据',
+    sheetName:'生公数据',
+    statusEl:status
+  });
 }
 document.getElementById('importPkBtn').onclick=async()=>{
   const rows=parseCsv(document.getElementById('pkCsv').value);
@@ -3120,6 +3146,8 @@ const applyBirthExcelEditBtn=document.getElementById('applyBirthExcelEditBtn');
 if(applyBirthExcelEditBtn) applyBirthExcelEditBtn.onclick=()=>applyExcelPreviewEdits('birth');
 const confirmBirthExcelBtn=document.getElementById('confirmBirthExcelBtn');
 if(confirmBirthExcelBtn) confirmBirthExcelBtn.onclick=()=>confirmExcelImport('birth');
+const exportBirthDataBtn=document.getElementById('exportBirthDataBtn');
+if(exportBirthDataBtn) exportBirthDataBtn.onclick=exportBirthDataExcel;
 const addManualBirthRowBtn=document.getElementById('addManualBirthRowBtn');
 if(addManualBirthRowBtn) addManualBirthRowBtn.onclick=()=>addManualImportRow('birth');
 
