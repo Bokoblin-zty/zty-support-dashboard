@@ -98,6 +98,10 @@
     grid-template-columns:1fr;
     padding:9px;
   }
+  .eventTotalText{
+    width:100%;
+    justify-content:center;
+  }
   .eventFilter.hidden{
     display:none;
   }

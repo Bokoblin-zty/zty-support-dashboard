@@ -968,7 +968,8 @@ function initControls(){
   const sel=document.getElementById('eventSelect');
   sel.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
   if(state.event) sel.value=state.event;
-  sel.onchange=e=>{state.event=e.target.value; state.view='event'; setActive('event'); renderAll();};
+  updateEventTotalText();
+  sel.onchange=e=>{state.event=e.target.value; state.view='event'; setActive('event'); updateEventTotalText(); renderAll();};
   document.getElementById('nameOptions').innerHTML = allNames().map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');
   const personalInput=document.getElementById('personalLookup');
   if(personalInput) personalInput.oninput=renderPersonalSearch;
@@ -1004,6 +1005,15 @@ function initControls(){
     };
     populateUnfulfilledRewardSelect();
   }
+}
+function updateEventTotalText(){
+  const el=document.getElementById('eventTotalText');
+  if(!el) return;
+  const eventName=state.event || document.getElementById('eventSelect')?.value || pkEvents()[0]?.event_name || '';
+  const total=DATA.records
+    .filter(r=>r.event_name===eventName)
+    .reduce((sum,row)=>sum+num(row.amount),0);
+  el.textContent=`单场总额 ${fmt(total)}`;
 }
 function setActive(v){
   const pkViews=['personal','participant','event','birth'];

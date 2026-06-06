@@ -128,6 +128,18 @@ header{padding:22px 18px 16px;background:linear-gradient(135deg,#fff,#fff9e8 58%
   border-radius:14px;
   padding:10px;
 }
+.eventTotalText{
+  display:inline-flex;
+  align-items:center;
+  min-height:38px;
+  padding:0 12px;
+  border:1px solid #efd487;
+  border-radius:12px;
+  background:#fff8df;
+  color:#9a6400;
+  font-weight:900;
+  white-space:nowrap;
+}
 .siteHero{
   background:linear-gradient(180deg,#fff 0%,#fff9e8 64%,#fff2bf 100%);
 }
