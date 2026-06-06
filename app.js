@@ -1007,13 +1007,16 @@ function initControls(){
   }
 }
 function updateEventTotalText(){
-  const el=document.getElementById('eventTotalText');
-  if(!el) return;
+  const totalEl=document.getElementById('eventTotalText');
+  const netEl=document.getElementById('eventNetText');
+  if(!totalEl && !netEl) return;
   const eventName=state.event || document.getElementById('eventSelect')?.value || pkEvents()[0]?.event_name || '';
   const total=DATA.records
     .filter(r=>r.event_name===eventName)
     .reduce((sum,row)=>sum+num(row.amount),0);
-  el.textContent=`单场总额 ${fmt(total)}`;
+  const net=Math.round(total * 0.994 * 100) / 100;
+  if(totalEl) totalEl.textContent=`单场总额 ${fmt(total)}`;
+  if(netEl) netEl.textContent=`实际收入 ${fmt(net)}`;
 }
 function setActive(v){
   const pkViews=['personal','participant','event','birth'];

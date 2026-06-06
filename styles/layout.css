@@ -140,6 +140,14 @@ header{padding:22px 18px 16px;background:linear-gradient(135deg,#fff,#fff9e8 58%
   font-weight:900;
   white-space:nowrap;
 }
+.eventNetText{
+  background:#fff;
+}
+.eventFeeNote{
+  flex-basis:100%;
+  text-align:right;
+  color:#9a6a16;
+}
 .siteHero{
   background:linear-gradient(180deg,#fff 0%,#fff9e8 64%,#fff2bf 100%);
 }
