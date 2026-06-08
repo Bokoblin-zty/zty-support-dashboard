@@ -24,8 +24,9 @@ const VISIT_VIEW_LABELS = {
 };
 
 let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[] };
-let state = { view:'overview', event:'', user:null, questionFilter:'pending', rewardProgressAvailable:true, rewardChoicesAvailable:true, visitLogsAvailable:true };
+let state = { view:'overview', event:'', user:null, questionFilter:'pending', dataAdminPanel:'import', rewardAdminPanel:'tasks', rewardProgressAvailable:true, rewardChoicesAvailable:true, visitLogsAvailable:true };
 let siteSettings = { access_password_hash: DEFAULT_SITE_ACCESS_PASSWORD_HASH, access_ttl_days: DEFAULT_SITE_ACCESS_TTL_DAYS, available:false };
+const IS_ADMIN_PAGE = document.body.classList.contains('adminPage');
 let pendingPkExcelRows = [];
 let pendingBirthExcelRows = [];
 let currentRewardAdminRows = [];
@@ -200,7 +201,18 @@ async function loadAll(){
   initControls();
   setActive(state.view);
   renderAll();
-  if(state.user){ renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); }
+  if(state.user){
+    renderAdminOverview();
+    renderRewardTaskAdmin();
+    renderAdminRewards();
+    renderRewardProgressAdmin();
+    renderRewardChoiceAdmin();
+    renderSpecialRankAdmin();
+    renderAnnouncementAdmin();
+    renderLotteryAdmin();
+    renderSiteSettingsAdmin();
+    renderAliasAdmin();
+  }
 }
 
 /* =========================
@@ -979,6 +991,7 @@ function initControls(){
   if(specialEvent) specialEvent.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
   const pkExcelEvent=document.getElementById('pkExcelEvent');
   if(pkExcelEvent) pkExcelEvent.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
+  syncUnifiedImportUi();
   const pkExportEvent=document.getElementById('pkExportEvent');
   if(pkExportEvent) pkExportEvent.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
   const ruleEventSelect=document.getElementById('ruleEventSelect');
@@ -996,15 +1009,6 @@ function initControls(){
     lotteryMonth.value=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   }
   setLotteryBuilderVisibility();
-  const unfulfilledEvent=document.getElementById('unfulfilledEventSelect');
-  if(unfulfilledEvent){
-    unfulfilledEvent.innerHTML = pkEvents().map(e=>`<option>${escapeHtml(e.event_name)}</option>`).join('');
-    unfulfilledEvent.onchange=()=>{
-      populateUnfulfilledRewardSelect();
-      renderUnfulfilledAdmin();
-    };
-    populateUnfulfilledRewardSelect();
-  }
 }
 function updateEventTotalText(){
   const totalEl=document.getElementById('eventTotalText');
@@ -1036,7 +1040,7 @@ function setActive(v){
 
   const eventBox=document.getElementById('eventFilterBox');
   if(eventBox) eventBox.classList.toggle('hidden', v!=='event');
-  recordVisit(v);
+  if(!IS_ADMIN_PAGE) recordVisit(v);
 }
 document.querySelectorAll('.btn[data-main-view]').forEach(b=>b.onclick=()=>{const mv=b.dataset.mainView;state.view=mv==='pk'?'personal':mv;setActive(state.view);renderAll();});
 document.querySelectorAll('.btn[data-view]').forEach(b=>b.onclick=()=>{
@@ -1432,19 +1436,25 @@ function renderSpecialRankRewardsForUser(name){
    管理后台
 ========================= */
 let titlePressTimer=null;
-document.getElementById('title').ondblclick=()=>openAdmin();
-document.getElementById('title').addEventListener('touchstart',()=>{titlePressTimer=setTimeout(openAdmin,5000)});
-document.getElementById('title').addEventListener('touchend',()=>clearTimeout(titlePressTimer));
-document.getElementById('closeAdmin').onclick=()=>document.getElementById('adminModal').classList.remove('show');
+const titleEl=document.getElementById('title');
+const goAdminPage=()=>{ window.location.href='admin.html'; };
+if(titleEl && !IS_ADMIN_PAGE){
+  titleEl.ondblclick=goAdminPage;
+  titleEl.addEventListener('touchstart',()=>{titlePressTimer=setTimeout(goAdminPage,5000)});
+  titleEl.addEventListener('touchend',()=>clearTimeout(titlePressTimer));
+}
+const closeAdminBtn=document.getElementById('closeAdmin');
+if(closeAdminBtn) closeAdminBtn.onclick=()=>document.getElementById('adminModal')?.classList.remove('show');
 
 async function openAdmin(){
   document.getElementById('adminModal').classList.add('show');
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   updateAuthUI();
-  if(user){ renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderSiteSettingsAdmin(); }
+  if(user){ renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderSiteSettingsAdmin(); }
 }
 function updateAuthUI(){
+  if(IS_ADMIN_PAGE) document.body.classList.toggle('adminLoggedIn', !!state.user);
   document.getElementById('loginBox').classList.toggle('hidden',!!state.user);
   document.getElementById('adminBox').classList.toggle('hidden',!state.user);
   document.getElementById('adminUser').textContent=state.user?`已登录：${state.user.email}`:'';
@@ -1465,21 +1475,24 @@ document.getElementById('loginBtn').onclick=async()=>{
   const password=document.getElementById('adminPassword').value;
   const res=await sb.auth.signInWithPassword({email,password});
   if(res.error){document.getElementById('loginStatus').textContent='登录失败：'+res.error.message;return;}
-  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderUnfulfilledAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderSiteSettingsAdmin();
+  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderRewardTaskAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderSiteSettingsAdmin();
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
 function renderAdminGroup(groupId){
   if(groupId==='adminOverview') renderAdminOverview();
   if(groupId==='dataAdmin'){
-    renderRuleRows();
+    setDataAdminPanel(state.dataAdminPanel || 'import', {skipScroll:true});
+    renderPkEventAdminList();
+    renderAliasAdmin();
   }
   if(groupId==='rewardCenter'){
+    setRewardAdminPanel(state.rewardAdminPanel || 'tasks', {skipScroll:true});
+    renderRewardTaskAdmin();
     renderAdminRewards();
     renderRewardProgressAdmin();
     renderRewardChoiceAdmin();
     renderSpecialRankAdmin();
-    renderUnfulfilledAdmin();
   }
   if(groupId==='contentCenter'){
     renderAnnouncementAdmin();
@@ -1490,6 +1503,57 @@ function renderAdminGroup(groupId){
     renderSiteSettingsAdmin();
     renderVisitStatsAdmin();
     renderOperationLogs();
+  }
+}
+
+function setDataAdminPanel(panel, options={}){
+  state.dataAdminPanel=panel || 'import';
+  document.querySelectorAll('.dataPanelBtn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.dataPanel===state.dataAdminPanel);
+  });
+  document.querySelectorAll('.adminSection[data-admin-group="dataAdmin"][data-data-panel]').forEach(section=>{
+    section.classList.toggle('dataPanelActive', section.dataset.dataPanel===state.dataAdminPanel);
+  });
+  if(!options.skipScroll){
+    document.getElementById('dataHubAdmin')?.scrollIntoView({block:'start',behavior:'smooth'});
+  }
+}
+
+function renderPkEventAdminList(){
+  const body=document.getElementById('pkEventAdminBody');
+  if(!body) return;
+  const rows=pkEvents().map(event=>{
+    const aggregated=aggregateByEventUser(DATA.records,event.event_name);
+    const total=aggregated.reduce((sum,row)=>sum+num(row.amount),0);
+    return {
+      event_name:event.event_name,
+      event_date:event.event_date || '-',
+      sort_order:event.sort_order ?? 0,
+      count:aggregated.length,
+      total
+    };
+  }).sort((a,b)=>num(a.sort_order)-num(b.sort_order) || String(a.event_name).localeCompare(String(b.event_name),'zh-Hans-CN'));
+  body.innerHTML=rows.map(row=>`
+    <tr>
+      <td><b>${escapeHtml(row.event_name)}</b></td>
+      <td>${escapeHtml(row.event_date)}</td>
+      <td>${escapeHtml(row.sort_order)}</td>
+      <td>${row.count}</td>
+      <td><b>${fmt(row.total)}</b></td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" class="small">暂无总选 PK 场次</td></tr>';
+}
+
+function setRewardAdminPanel(panel, options={}){
+  state.rewardAdminPanel=panel || 'tasks';
+  document.querySelectorAll('.rewardPanelBtn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.rewardPanel===state.rewardAdminPanel);
+  });
+  document.querySelectorAll('.adminSection[data-admin-group="rewardCenter"][data-reward-panel]').forEach(section=>{
+    section.classList.toggle('rewardPanelActive', section.dataset.rewardPanel===state.rewardAdminPanel);
+  });
+  if(!options.skipScroll){
+    document.getElementById('rewardHubAdmin')?.scrollIntoView({block:'start',behavior:'smooth'});
   }
 }
 
@@ -1504,14 +1568,32 @@ function setAdminTab(tabId){
   tab.classList.add('active');
   sections.forEach(section=>section.classList.add('active'));
   renderAdminGroup(groupId);
+  if(groupId==='dataAdmin' && targetSection?.dataset.dataPanel){
+    setDataAdminPanel(targetSection.dataset.dataPanel, {skipScroll:true});
+  }
+  if(groupId==='rewardCenter' && targetSection?.dataset.rewardPanel){
+    setRewardAdminPanel(targetSection.dataset.rewardPanel, {skipScroll:true});
+  }
   if(targetSection && targetSection.dataset.adminGroup){
     setTimeout(()=>targetSection.scrollIntoView({block:'start',behavior:'smooth'}),0);
   }
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>setAdminTab(t.dataset.adminTab));
+document.querySelectorAll('.dataPanelBtn').forEach(btn=>{
+  btn.onclick=()=>setDataAdminPanel(btn.dataset.dataPanel);
+});
+document.querySelectorAll('.rewardPanelBtn').forEach(btn=>{
+  btn.onclick=()=>setRewardAdminPanel(btn.dataset.rewardPanel);
+});
 
-document.getElementById('reloadRewards').onclick=()=>renderAdminRewards();
-document.getElementById('rewardSearch').oninput=()=>renderAdminRewards();
+const reloadRewards=document.getElementById('reloadRewards');
+if(reloadRewards) reloadRewards.onclick=()=>renderAdminRewards();
+['rewardSearch','rewardFulfillmentFilter','rewardSourceFilter','rewardEventFilter','rewardNameFilter','rewardChoiceStateFilter'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el) return;
+  const eventName=el.tagName==='INPUT' ? 'input' : 'change';
+  el.addEventListener(eventName, renderAdminRewards);
+});
 const quickFulfillSearchBtn=document.getElementById('quickFulfillSearchBtn');
 if(quickFulfillSearchBtn) quickFulfillSearchBtn.onclick=renderQuickFulfillAdmin;
 const quickFulfillName=document.getElementById('quickFulfillName');
@@ -1551,24 +1633,197 @@ async function renderAdminOverview(){
   tasks.querySelectorAll('.adminTaskCard').forEach(btn=>btn.onclick=()=>setAdminTab(btn.dataset.adminTarget));
 }
 
+function rewardTaskMetrics(){
+  const normalUnfulfilled=[...allEarnedRewards(), ...allEarnedBirthRewards()].filter(r=>!r.fulfilled).length;
+  const specialUnfulfilled=(DATA.specialRankRewards || []).filter(r=>!r.fulfilled).length;
+  const pendingChoices=allChoiceRewardRows().filter(r=>r.choiceInfo?.status==='pending').length;
+  const needsProgress=allChoiceRewardRows().filter(r=>choiceProgressState(r)==='needs_progress').length;
+  const activeProgress=(DATA.rewardProgress || []).filter(r=>r.progress_status && !['已兑现','已完结'].includes(r.progress_status)).length;
+  return {normalUnfulfilled,specialUnfulfilled,pendingChoices,needsProgress,activeProgress};
+}
+
+function renderRewardTaskAdmin(){
+  const tasks=document.getElementById('rewardTaskGrid');
+  if(!tasks) return;
+  const metrics=rewardTaskMetrics();
+  const cards=[
+    ['普通未兑现', metrics.normalUnfulfilled, '进入兑现工作台，搜索 ID 或批量更新', 'rewardAdmin'],
+    ['特殊未兑现', metrics.specialUnfulfilled, '进入特殊排名奖励配置并处理兑现', 'specialRankAdmin'],
+    ['待选择奖励', metrics.pendingChoices, '为二选一或多选一奖励保存具体选择', 'rewardChoiceAdmin'],
+    ['待编辑进度', metrics.needsProgress, '已选择但还没有设置制作进度', 'rewardProgressAdmin'],
+    ['制作中项目', metrics.activeProgress, '查看仍在推进中的奖励制作状态', 'rewardProgressAdmin']
+  ];
+  tasks.innerHTML=cards.map(([label,value,note,tabId])=>`
+    <button class="adminTaskCard" type="button" data-admin-target="${escapeHtml(tabId)}">
+      <span>${escapeHtml(label)}</span>
+      <b>${escapeHtml(value)}</b>
+      <small>${escapeHtml(note)}</small>
+    </button>
+  `).join('');
+  tasks.querySelectorAll('.adminTaskCard').forEach(btn=>btn.onclick=()=>setAdminTab(btn.dataset.adminTarget));
+}
+
+function allAdminRewardRows(){
+  const normalRows=[
+    ...allEarnedRewards(),
+    ...allEarnedBirthRewards()
+  ].map(r=>({
+    ...r,
+    provider_type:r.provider_type || inferRewardProviderType(null,r.reward_name)
+  }));
+  const specialRows=(DATA.specialRankRewards || []).map(r=>({
+    source_type:'special',
+    id:r.id,
+    user_name:canon(r.winner_name),
+    event_name:r.event_name || '特殊排名奖励',
+    reward_name:r.reward_name,
+    amount:'',
+    fulfilled:!!r.fulfilled,
+    fulfilled_date:r.fulfilled_date || '',
+    provider_type:r.provider_type || 'support_club',
+    special_status:r.status || '',
+    note:r.note || ''
+  }));
+  return [...normalRows, ...specialRows];
+}
+
+function rewardChoiceFilterState(row){
+  const info=rewardChoiceInfo(row.user_name,row.source_type,row.event_name,row.reward_name);
+  if(!info) return 'no_choice';
+  if(!info.selected) return 'pending';
+  return progressForReward(info.selected) ? 'selected' : 'needs_progress';
+}
+
+function adminRewardSearchText(row){
+  const choice=rewardChoiceInfo(row.user_name,row.source_type,row.event_name,row.reward_name);
+  return [
+    row.user_name,
+    row.event_name,
+    row.reward_name,
+    sourceTypeText(row.source_type),
+    providerTypeText(row.provider_type),
+    choice?.selected || '',
+    rewardChoiceFilterState(row),
+    row.special_status ? specialStatusText(row.special_status) : '',
+    row.note || ''
+  ].join(' ').toLowerCase();
+}
+
+function rewardFilterOptions(rows, key){
+  return [...new Set(rows.map(r=>String(r[key] || '').trim()).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'zh-Hans-CN'))
+    .map(value=>({value,label:value}));
+}
+
+function setSelectOptions(id, allLabel, options){
+  const select=document.getElementById(id);
+  if(!select) return 'all';
+  const current=select.value || 'all';
+  select.innerHTML=[
+    `<option value="all">${escapeHtml(allLabel)}</option>`,
+    ...options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+  ].join('');
+  select.value=options.some(option=>option.value===current) ? current : 'all';
+  return select.value;
+}
+
+function refreshRewardFilterOptions(allRows){
+  const source=document.getElementById('rewardSourceFilter')?.value || 'all';
+  const sourceRows=source==='all' ? allRows : allRows.filter(r=>r.source_type===source);
+  const event=setSelectOptions('rewardEventFilter','全部场次 / 分组', rewardFilterOptions(sourceRows,'event_name'));
+  const eventRows=event==='all' ? sourceRows : sourceRows.filter(r=>r.event_name===event);
+  setSelectOptions('rewardNameFilter','全部奖励', rewardFilterOptions(eventRows,'reward_name'));
+}
+
+function filterAdminRewardRows(rows){
+  const kw=(document.getElementById('rewardSearch')?.value || '').toLowerCase().trim();
+  const source=document.getElementById('rewardSourceFilter')?.value || 'all';
+  const fulfillment=document.getElementById('rewardFulfillmentFilter')?.value || 'all';
+  const eventName=document.getElementById('rewardEventFilter')?.value || 'all';
+  const rewardName=document.getElementById('rewardNameFilter')?.value || 'all';
+  const choiceState=document.getElementById('rewardChoiceStateFilter')?.value || 'all';
+  return rows.filter(row=>{
+    if(source!=='all' && row.source_type!==source) return false;
+    if(fulfillment==='unfulfilled' && row.fulfilled) return false;
+    if(fulfillment==='fulfilled' && !row.fulfilled) return false;
+    if(eventName!=='all' && row.event_name!==eventName) return false;
+    if(rewardName!=='all' && row.reward_name!==rewardName) return false;
+    if(choiceState!=='all' && rewardChoiceFilterState(row)!==choiceState) return false;
+    if(kw && !adminRewardSearchText(row).includes(kw)) return false;
+    return true;
+  });
+}
+
+function rewardChoiceSummaryText(row){
+  const info=rewardChoiceInfo(row.user_name,row.source_type,row.event_name,row.reward_name);
+  if(!info) return '无需选择';
+  return info.selected ? `已选择：${info.selected}` : '待选择';
+}
+
+function rewardRowsToCsv(rows){
+  const headers=['来源','用户','场次/分组','奖励','金额','兑现状态','兑现日期','选择状态','提供方','备注'];
+  const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
+  const body=rows.map(row=>[
+    sourceTypeText(row.source_type),
+    row.user_name,
+    row.event_name,
+    row.reward_name,
+    row.amount ? fmt(row.amount) : '',
+    row.fulfilled ? '已兑现' : '未兑现',
+    row.fulfilled_date || '',
+    rewardChoiceSummaryText(row),
+    providerTypeText(row.provider_type),
+    row.note || ''
+  ].map(esc).join(','));
+  return [headers.join(','), ...body].join('\n');
+}
+
+function rewardRowsToText(rows){
+  if(!rows.length) return '当前筛选条件下暂无未兑现奖励';
+  return [
+    `当前筛选未兑现奖励（${rows.length}条）`,
+    ...rows.map((row,index)=>{
+      const amount=row.amount ? `｜金额 ${fmt(row.amount)}` : '';
+      const choice=rewardChoiceSummaryText(row);
+      return `${index+1}. ${row.user_name}｜${sourceTypeText(row.source_type)}｜${row.event_name}｜${row.reward_name}${amount}｜${choice}`;
+    })
+  ].join('\n');
+}
+
 function renderAdminRewards(){
-  const kw=(document.getElementById('rewardSearch').value||'').toLowerCase().trim();
   const quickDate=document.getElementById('quickFulfillDate');
   if(quickDate && !quickDate.value) quickDate.value=todayDateText();
-  let rows=[...allEarnedRewards(), ...allEarnedBirthRewards()];
-  rows=rows
-    .filter(r=>!kw || `${r.user_name} ${r.event_name} ${r.reward_name} ${sourceTypeText(r.source_type)}`.toLowerCase().includes(kw))
-    .sort((a,b)=>Number(!!a.fulfilled)-Number(!!b.fulfilled) || `${a.reward_name}${a.event_name}${a.user_name}`.localeCompare(`${b.reward_name}${b.event_name}${b.user_name}`,'zh-Hans-CN'));
+  const body=document.getElementById('rewardAdminBody');
+  if(!body) return;
+  const allRows=allAdminRewardRows();
+  refreshRewardFilterOptions(allRows);
+  const rows=filterAdminRewardRows(allRows)
+    .sort((a,b)=>Number(!!a.fulfilled)-Number(!!b.fulfilled)
+      || String(sourceTypeText(a.source_type)).localeCompare(String(sourceTypeText(b.source_type)),'zh-Hans-CN')
+      || String(a.event_name || '').localeCompare(String(b.event_name || ''),'zh-Hans-CN')
+      || String(a.reward_name || '').localeCompare(String(b.reward_name || ''),'zh-Hans-CN')
+      || String(a.user_name || '').localeCompare(String(b.user_name || ''),'zh-Hans-CN'));
   currentRewardAdminRows=rows;
+  const countPill=document.getElementById('rewardListCountPill');
+  if(countPill){
+    const unfulfilled=rows.filter(r=>!r.fulfilled).length;
+    countPill.textContent=`当前 ${rows.length} 条｜未兑现 ${unfulfilled} 条`;
+    countPill.className=`pill ${unfulfilled ? 'warn' : 'good'}`;
+  }
   const selectAll=document.getElementById('rewardSelectAll');
   if(selectAll) selectAll.checked=false;
-  document.getElementById('rewardAdminBody').innerHTML=rows.map((r,i)=>`
+  body.innerHTML=rows.map((r,i)=>{
+    const amountText=r.amount ? ` ｜ 金额 ${fmt(r.amount)}` : '';
+    const specialText=r.source_type==='special' && r.special_status ? ` ｜ ${specialStatusText(r.special_status)}` : '';
+    const noteText=r.note ? ` ｜ 备注：${escapeHtml(r.note)}` : '';
+    return `
     <tr>
       <td><input class="reward-row-check" type="checkbox" data-i="${i}" aria-label="选择 ${escapeHtml(r.user_name)} ${escapeHtml(r.reward_name)}"></td>
       <td>${r.fulfilled?`<span class="pill good">已兑现${r.fulfilled_date?' '+escapeHtml(r.fulfilled_date):''}</span>`:`<span class="pill warn">未兑现</span>`}</td>
-      <td><b>${escapeHtml(r.user_name)}</b><div class="small">${escapeHtml(sourceTypeText(r.source_type))} ｜ ${escapeHtml(r.event_name)} ｜ ${fmt(r.amount)} ｜ ${escapeHtml(r.reward_name)}</div>${renderAdminChoiceSummary(r)}</td>
+      <td><b>${escapeHtml(r.user_name || '-')}</b><div class="small">${escapeHtml(sourceTypeText(r.source_type))} ｜ ${escapeHtml(r.event_name || '-')} ｜ ${escapeHtml(r.reward_name || '-')}${amountText} ｜ ${escapeHtml(providerTypeText(r.provider_type))}${specialText}${noteText}</div>${renderAdminChoiceSummary(r)}</td>
       <td><button class="btn ${r.fulfilled?'bad':'good'} reward-toggle" data-i="${i}">${r.fulfilled?'标为未兑现':'标为已兑现'}</button></td>
-    </tr>`).join('') || '<tr><td colspan="4" class="small">暂无奖励数据</td></tr>';
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" class="small">当前筛选条件下暂无奖励数据</td></tr>';
   document.querySelectorAll('.reward-toggle').forEach(btn=>btn.onclick=()=>toggleReward(rows[+btn.dataset.i]));
 }
 
@@ -1929,6 +2184,62 @@ async function saveRewardChoice(row, selected=''){
   await loadAll();
 }
 
+async function renderAliasAdmin(){
+  const rulesBody=document.getElementById('aliasRulesBody');
+  const historyBody=document.getElementById('aliasHistoryBody');
+  const historyStatus=document.getElementById('aliasHistoryStatus');
+  if(!rulesBody && !historyBody) return;
+  const aliases=[...(DATA.aliases || [])].sort((a,b)=>
+    String(a.canonical_name || '').localeCompare(String(b.canonical_name || ''),'zh-Hans-CN') ||
+    String(a.alias_name || '').localeCompare(String(b.alias_name || ''),'zh-Hans-CN')
+  );
+  if(rulesBody){
+    rulesBody.innerHTML=aliases.map(row=>`
+      <tr>
+        <td><b>${escapeHtml(row.alias_name || '-')}</b></td>
+        <td><span class="pill good">${escapeHtml(row.canonical_name || '-')}</span></td>
+        <td>${escapeHtml(formatDateTime(row.created_at))}</td>
+        <td><button class="btn alias-edit-btn" data-alias="${escapeHtml(row.alias_name || '')}" data-canonical="${escapeHtml(row.canonical_name || '')}" type="button">填入编辑</button></td>
+      </tr>
+    `).join('') || '<tr><td colspan="4" class="small">暂无名称合并规则</td></tr>';
+    document.querySelectorAll('.alias-edit-btn').forEach(btn=>{
+      btn.onclick=()=>{
+        const aliasInput=document.getElementById('aliasName');
+        const canonicalInput=document.getElementById('canonicalName');
+        if(aliasInput) aliasInput.value=btn.dataset.alias || '';
+        if(canonicalInput) canonicalInput.value=btn.dataset.canonical || '';
+        const status=document.getElementById('aliasStatus');
+        if(status) status.textContent='已填入，可修改后重新保存';
+      };
+    });
+  }
+  const aliasStatus=document.getElementById('aliasStatus');
+  if(aliasStatus && !aliasStatus.textContent) aliasStatus.textContent=`当前生效规则：${aliases.length} 条`;
+  if(!historyBody) return;
+  if(historyStatus) historyStatus.textContent='正在读取历史保存记录...';
+  const res=await sb.from('operation_logs')
+    .select('created_at,admin_email,detail,metadata')
+    .eq('action','upsert_name_alias')
+    .order('created_at',{ascending:false});
+  if(res.error){
+    if(historyStatus) historyStatus.textContent='历史保存记录读取失败：'+res.error.message;
+    historyBody.innerHTML='<tr><td colspan="3" class="small">暂无可显示历史记录</td></tr>';
+    return;
+  }
+  const rows=res.data || [];
+  if(historyStatus) historyStatus.textContent=`历史保存记录：${rows.length} 条`;
+  historyBody.innerHTML=rows.map(row=>{
+    const alias=row.metadata?.alias_name || '';
+    const canonical=row.metadata?.canonical_name || '';
+    const detail=alias || canonical ? `${alias} → ${canonical}` : row.detail || '-';
+    return `<tr>
+      <td>${escapeHtml(formatDateTime(row.created_at))}</td>
+      <td><b>${escapeHtml(detail)}</b></td>
+      <td>${escapeHtml(row.admin_email || '-')}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="3" class="small">暂无历史保存记录</td></tr>';
+}
+
 document.getElementById('addEventBtn').onclick=async()=>{
   const event_name=document.getElementById('newEventName').value.trim();
   const event_date=document.getElementById('newEventDate').value.trim();
@@ -1936,7 +2247,7 @@ document.getElementById('addEventBtn').onclick=async()=>{
   if(!event_name){document.getElementById('eventAdminStatus').textContent='请填写场次名称';return;}
   const res=await sb.from('pk_events').insert({event_name,event_date,sort_order,is_general_election:true});
   document.getElementById('eventAdminStatus').textContent=res.error?'新增失败：'+res.error.message:'新增成功';
-  if(!res.error){await logOperation('create_pk_event', event_name, {event_name,event_date,sort_order}); await loadAll();}
+  if(!res.error){await logOperation('create_pk_event', event_name, {event_name,event_date,sort_order}); await loadAll(); renderPkEventAdminList();}
 };
 
 /* =========================
@@ -2092,30 +2403,95 @@ function readAdjustedPreview(targetId){
     amount:num(tr.querySelector('.excelAmountInput')?.value)
   })).filter(r=>r.user_name && Number.isFinite(r.amount) && r.amount>0);
 }
-function applyExcelPreviewEdits(kind){
+function activeImportKind(kind){
+  const selected=document.getElementById('unifiedImportKind')?.value;
+  return kind || selected || 'pk';
+}
+function importUiConfig(kind){
+  const current=activeImportKind(kind);
+  const unified=!!document.getElementById('unifiedImportKind');
+  if(unified){
+    return {
+      kind:current,
+      isPk:current==='pk',
+      fileId:'unifiedExcelFile',
+      previewId:'unifiedExcelPreview',
+      nameId:'manualUnifiedName',
+      amountId:'manualUnifiedAmount',
+      statusId:'unifiedImportStatus',
+      applyBtnId:'applyUnifiedExcelEditBtn',
+      confirmBtnId:'confirmUnifiedExcelBtn',
+      csvId:'unifiedCsv'
+    };
+  }
+  const isPk=current==='pk';
+  return {
+    kind:current,
+    isPk,
+    fileId:isPk?'pkExcelFile':'birthExcelFile',
+    previewId:isPk?'pkExcelPreview':'birthExcelPreview',
+    nameId:isPk?'manualPkName':'manualBirthName',
+    amountId:isPk?'manualPkAmount':'manualBirthAmount',
+    statusId:isPk?'pkImportStatus':'birthImportStatus',
+    applyBtnId:isPk?'applyPkExcelEditBtn':'applyBirthExcelEditBtn',
+    confirmBtnId:isPk?'confirmPkExcelBtn':'confirmBirthExcelBtn',
+    csvId:isPk?'pkCsv':'birthCsv'
+  };
+}
+function resetUnifiedImportPreview(){
+  pendingPkExcelRows=[];
+  pendingBirthExcelRows=[];
+  const preview=document.getElementById('unifiedExcelPreview');
+  if(preview){
+    preview.classList.add('hidden');
+    preview.innerHTML='';
+  }
+  document.getElementById('applyUnifiedExcelEditBtn')?.classList.add('hidden');
+  document.getElementById('confirmUnifiedExcelBtn')?.classList.add('hidden');
+  const status=document.getElementById('unifiedImportStatus');
+  if(status) status.textContent='';
+}
+function syncUnifiedImportUi(options={}){
+  const kind=activeImportKind();
   const isPk=kind==='pk';
-  const rows=readAdjustedPreview(isPk?'pkExcelPreview':'birthExcelPreview');
-  const status=document.getElementById(isPk?'pkImportStatus':'birthImportStatus');
+  document.querySelectorAll('.unifiedPkTarget').forEach(el=>el.classList.toggle('hidden', !isPk));
+  document.querySelectorAll('.unifiedBirthTarget').forEach(el=>el.classList.toggle('hidden', isPk));
+  const csv=document.getElementById('unifiedCsv');
+  if(csv){
+    csv.placeholder=isPk
+      ? 'user_name,amount\n波克布林,334.8'
+      : 'user_name,amount\n徐乐迪,50';
+  }
+  const confirmBtn=document.getElementById('confirmUnifiedExcelBtn');
+  if(confirmBtn) confirmBtn.textContent=isPk?'确认导入总选 PK 数据':'确认导入生公数据';
+  if(options.reset) resetUnifiedImportPreview();
+}
+function applyExcelPreviewEdits(kind){
+  const cfg=importUiConfig(kind);
+  const isPk=cfg.isPk;
+  const rows=readAdjustedPreview(cfg.previewId);
+  const status=document.getElementById(cfg.statusId);
   if(!rows.length){status.textContent='调整后的预览表没有有效名称和金额';return;}
   if(isPk){
     const eventName=document.getElementById('pkExcelEvent').value;
     pendingPkExcelRows=rows.map(r=>({event_name:eventName,user_name:r.user_name,amount:r.amount}));
-    renderImportPreview('pkExcelPreview', rows);
+    renderImportPreview(cfg.previewId, rows);
   }else{
     const batchName=document.getElementById('birthExcelBatch').value.trim();
     pendingBirthExcelRows=rows.map(r=>({user_name:r.user_name,amount:r.amount,batch_name:batchName}));
-    renderImportPreview('birthExcelPreview', rows);
+    renderImportPreview(cfg.previewId, rows);
   }
   status.textContent='手动调整已应用，请确认导入';
 }
 function addManualImportRow(kind){
-  const isPk=kind==='pk';
-  const nameInput=document.getElementById(isPk?'manualPkName':'manualBirthName');
-  const amountInput=document.getElementById(isPk?'manualPkAmount':'manualBirthAmount');
-  const status=document.getElementById(isPk?'pkImportStatus':'birthImportStatus');
-  const previewId=isPk?'pkExcelPreview':'birthExcelPreview';
-  const applyBtn=document.getElementById(isPk?'applyPkExcelEditBtn':'applyBirthExcelEditBtn');
-  const confirmBtn=document.getElementById(isPk?'confirmPkExcelBtn':'confirmBirthExcelBtn');
+  const cfg=importUiConfig(kind);
+  const isPk=cfg.isPk;
+  const nameInput=document.getElementById(cfg.nameId);
+  const amountInput=document.getElementById(cfg.amountId);
+  const status=document.getElementById(cfg.statusId);
+  const previewId=cfg.previewId;
+  const applyBtn=document.getElementById(cfg.applyBtnId);
+  const confirmBtn=document.getElementById(cfg.confirmBtnId);
   const name=canon(nameInput?.value);
   const amount=num(amountInput?.value);
   if(!name || !amount){ if(status) status.textContent='请填写有效名称和金额'; return; }
@@ -2136,11 +2512,12 @@ function addManualImportRow(kind){
   if(status) status.textContent='已加入预览表，请确认后导入';
 }
 async function previewOrderExcel(kind){
-  const isPk=kind==='pk';
-  const file=document.getElementById(isPk?'pkExcelFile':'birthExcelFile').files?.[0];
-  const status=document.getElementById(isPk?'pkImportStatus':'birthImportStatus');
-  const confirmBtn=document.getElementById(isPk?'confirmPkExcelBtn':'confirmBirthExcelBtn');
-  const applyBtn=document.getElementById(isPk?'applyPkExcelEditBtn':'applyBirthExcelEditBtn');
+  const cfg=importUiConfig(kind);
+  const isPk=cfg.isPk;
+  const file=document.getElementById(cfg.fileId).files?.[0];
+  const status=document.getElementById(cfg.statusId);
+  const confirmBtn=document.getElementById(cfg.confirmBtnId);
+  const applyBtn=document.getElementById(cfg.applyBtnId);
   if(!file){status.textContent='请先选择微店订单 Excel 文件';return;}
   try{
     const rows=await readExcelRows(file);
@@ -2148,11 +2525,11 @@ async function previewOrderExcel(kind){
     if(isPk){
       const eventName=document.getElementById('pkExcelEvent').value;
       pendingPkExcelRows=rows.map(r=>({event_name:eventName,user_name:r.user_name,amount:r.amount}));
-      renderImportPreview('pkExcelPreview', rows);
+      renderImportPreview(cfg.previewId, rows);
     }else{
       const batchName=document.getElementById('birthExcelBatch').value.trim();
       pendingBirthExcelRows=rows.map(r=>({user_name:r.user_name,amount:r.amount,batch_name:batchName}));
-      renderImportPreview('birthExcelPreview', rows);
+      renderImportPreview(cfg.previewId, rows);
     }
     applyBtn.classList.remove('hidden');
     confirmBtn.classList.remove('hidden');
@@ -2162,11 +2539,12 @@ async function previewOrderExcel(kind){
   }
 }
 async function confirmExcelImport(kind){
-  const isPk=kind==='pk';
-  const adjusted=readAdjustedPreview(isPk?'pkExcelPreview':'birthExcelPreview');
-  if(adjusted.length) applyExcelPreviewEdits(kind);
+  const cfg=importUiConfig(kind);
+  const isPk=cfg.isPk;
+  const adjusted=readAdjustedPreview(cfg.previewId);
+  if(adjusted.length) applyExcelPreviewEdits(cfg.kind);
   const data=isPk ? pendingPkExcelRows : pendingBirthExcelRows;
-  const status=document.getElementById(isPk?'pkImportStatus':'birthImportStatus');
+  const status=document.getElementById(cfg.statusId);
   if(!data.length){status.textContent='没有可导入的识别数据';return;}
   const res=await sb.from(isPk?'pk_records':'birth_fund_records').insert(data);
   status.textContent=res.error?'导入失败：'+res.error.message:`导入成功：${data.length} 条`;
@@ -2248,7 +2626,7 @@ function exportRankedTwoColumnExcel({title,rows,fileName,sheetName='数据',stat
   if(statusEl) statusEl.textContent=`已导出 ${title}：${rows.length} 个 ID`;
 }
 function exportPkEventExcel(){
-  const status=document.getElementById('pkImportStatus');
+  const status=document.getElementById('dataExportStatus') || document.getElementById('pkImportStatus');
   const eventName=document.getElementById('pkExportEvent')?.value || '';
   if(!eventName){if(status) status.textContent='请先选择要导出的 PK 场次'; return;}
   if(!window.XLSX){if(status) status.textContent='Excel 导出库未加载，请刷新页面后重试'; return;}
@@ -2267,7 +2645,7 @@ function exportPkEventExcel(){
   if(status) status.textContent=`已导出 ${eventName}：${rows.length} 个 ID`;
 }
 function exportBirthDataExcel(){
-  const status=document.getElementById('birthImportStatus');
+  const status=document.getElementById('dataExportStatus') || document.getElementById('birthImportStatus');
   if(!window.XLSX){if(status) status.textContent='Excel 导出库未加载，请刷新页面后重试'; return;}
   const rows=birthByUser()
     .filter(r=>num(r.total)>0)
@@ -2282,7 +2660,39 @@ function exportBirthDataExcel(){
     statusEl:status
   });
 }
-document.getElementById('importPkBtn').onclick=async()=>{
+async function importCsvByKind(kind){
+  const cfg=importUiConfig(kind);
+  const isPk=cfg.isPk;
+  const status=document.getElementById(cfg.statusId);
+  const rows=parseCsv(document.getElementById(cfg.csvId)?.value || '');
+  if(isPk){
+    const eventName=document.getElementById('pkExcelEvent')?.value || '';
+    if(!eventName){status.textContent='请先选择总选 PK 场次';return;}
+    const data=mergePkImportRows(rows
+      .filter(r=>r.length>=2 && !/^(event|user|name|名称)/i.test(String(r[0]||'')))
+      .map(r=>{
+        const oldFormat=r.length>=3 && num(r[2])>0 && num(r[1])===0;
+        return oldFormat
+          ? {event_name:r[0],user_name:r[1],amount:num(r[2])}
+          : {event_name:eventName,user_name:r[0],amount:num(r[1])};
+      }));
+    if(!data.length){status.textContent='没有识别到有效数据';return;}
+    const res=await sb.from('pk_records').insert(data);
+    status.textContent=res.error?'导入失败：'+res.error.message:`导入成功：${data.length} 条`;
+    if(!res.error){await logOperation('import_pk_records', `导入 ${data.length} 条`, {count:data.length}); await loadAll();}
+    return;
+  }
+  const batchName=document.getElementById('birthExcelBatch')?.value.trim() || '';
+  const data=mergeBirthImportRows(rows
+    .filter(r=>r.length>=2 && !/^(user|name|名称)/i.test(String(r[0]||'')))
+    .map(r=>({user_name:r[0],amount:num(r[1]),batch_name:r[2]||batchName})));
+  if(!data.length){status.textContent='没有识别到有效数据';return;}
+  const res=await sb.from('birth_fund_records').insert(data);
+  status.textContent=res.error?'导入失败：'+res.error.message:`导入成功：${data.length} 条`;
+  if(!res.error){await logOperation('import_birth_fund_records', `导入 ${data.length} 条`, {count:data.length}); await loadAll();}
+}
+const importPkBtn=document.getElementById('importPkBtn');
+if(importPkBtn) importPkBtn.onclick=async()=>{
   const rows=parseCsv(document.getElementById('pkCsv').value);
   const data=mergePkImportRows(rows.filter(r=>r.length>=3 && !/event/i.test(r[0])).map(r=>({event_name:r[0],user_name:r[1],amount:num(r[2])})));
   if(!data.length){document.getElementById('pkImportStatus').textContent='没有识别到有效数据';return;}
@@ -2290,7 +2700,8 @@ document.getElementById('importPkBtn').onclick=async()=>{
   document.getElementById('pkImportStatus').textContent=res.error?'导入失败：'+res.error.message:`导入成功：${data.length} 条`;
   if(!res.error){await logOperation('import_pk_records', `导入 ${data.length} 条`, {count:data.length}); await loadAll();}
 };
-document.getElementById('importBirthBtn').onclick=async()=>{
+const importBirthBtn=document.getElementById('importBirthBtn');
+if(importBirthBtn) importBirthBtn.onclick=async()=>{
   const rows=parseCsv(document.getElementById('birthCsv').value);
   const data=mergeBirthImportRows(rows.filter(r=>r.length>=2 && !/user/i.test(r[0])).map(r=>({user_name:r[0],amount:num(r[1]),batch_name:r[2]||''})));
   if(!data.length){document.getElementById('birthImportStatus').textContent='没有识别到有效数据';return;}
@@ -2456,132 +2867,6 @@ async function submitRuleRows(){
 }
 
 
-
-function getUnfulfilledRewards(){
-  const eventSelect=document.getElementById('unfulfilledEventSelect');
-  const rewardSelect=document.getElementById('unfulfilledRewardSelect');
-  const selectedEvent=eventSelect ? eventSelect.value : '';
-  const selectedReward=rewardSelect ? rewardSelect.value : '';
-  const rows = [];
-
-  if(!selectedEvent || !selectedReward) return rows;
-
-  const eventRows = aggregateByEventUser(DATA.records, selectedEvent);
-  for(const r of eventRows){
-    const rewards = rewardItemsFor(r.user_name, r.event_name, r.amount);
-    for(const item of rewards){
-      if(item.reward === selectedReward && !item.fulfilled){
-        const rank = eventRows.findIndex(x=>x.user_name===r.user_name && num(x.amount)===num(r.amount)) + 1;
-        rows.push({
-          type:'金额门槛奖励',
-          rank: rank || '',
-          user_name:r.user_name,
-          event_name:r.event_name,
-          reward_name:item.reward,
-          amount:num(r.amount),
-          threshold:num(item.min),
-          provider_name:'应援会',
-          status:'未兑现',
-          note:''
-        });
-      }
-    }
-  }
-
-  for(const r of DATA.specialRankRewards || []){
-    if(r.event_name !== selectedEvent) continue;
-    if(r.reward_name !== selectedReward) continue;
-    if(!r.fulfilled){
-      rows.push({
-        type:'特殊排名奖励',
-        rank: r.target_rank ? `原定第${r.target_rank}名` : '',
-        user_name:r.winner_name,
-        event_name:r.event_name,
-        reward_name:r.reward_name,
-        amount:'',
-        threshold:'',
-        provider_name:r.provider_name || '',
-        status:specialStatusText(r.status),
-        note:r.note || ''
-      });
-    }
-  }
-
-  return rows.sort((a,b)=>
-    String(a.type||'').localeCompare(String(b.type||''),'zh-Hans-CN') ||
-    num(a.rank)-num(b.rank) ||
-    String(a.user_name||'').localeCompare(String(b.user_name||''),'zh-Hans-CN')
-  );
-}
-
-function populateUnfulfilledRewardSelect(){
-  const eventSelect=document.getElementById('unfulfilledEventSelect');
-  const rewardSelect=document.getElementById('unfulfilledRewardSelect');
-  if(!eventSelect || !rewardSelect) return;
-
-  const eventName=eventSelect.value || pkEvents()[0]?.event_name || '';
-  const normalRewards = DATA.rewardRules
-    .filter(r=>r.event_name===eventName)
-    .sort((a,b)=>num(a.sort_order)-num(b.sort_order) || num(b.threshold)-num(a.threshold))
-    .map(r=>r.reward_name);
-
-  const specialRewards = (DATA.specialRankRewards || [])
-    .filter(r=>r.event_name===eventName)
-    .map(r=>r.reward_name);
-
-  const rewards=[...new Set([...normalRewards, ...specialRewards])];
-
-  const current=rewardSelect.value;
-  rewardSelect.innerHTML = rewards.map(r=>`<option>${escapeHtml(r)}</option>`).join('');
-  if(rewards.includes(current)) rewardSelect.value=current;
-  rewardSelect.onchange=renderUnfulfilledAdmin;
-}
-
-function renderUnfulfilledAdmin(){
-  populateUnfulfilledRewardSelect();
-  const body=document.getElementById('unfulfilledBody');
-  if(!body) return;
-  const rows=getUnfulfilledRewards();
-  const countPill=document.getElementById('unfulfilledCountPill');
-  if(countPill) countPill.textContent=`未兑现 ${rows.length} 人`;
-
-  body.innerHTML = rows.map(r=>`
-    <tr>
-      <td><span class="pill ${r.type==='特殊排名奖励'?'warn':''}">${escapeHtml(r.rank || r.type)}</span></td>
-      <td>
-        <b>${escapeHtml(r.user_name || '-')}</b>
-        <div class="small">${escapeHtml(r.event_name || '-')} ｜ ${escapeHtml(r.reward_name || '-')}</div>
-        <div class="small">
-          ${r.type==='金额门槛奖励'
-            ? `PK金额：${fmt(r.amount)} ｜ 门槛：${fmt(r.threshold)} ｜ 提供者：应援会`
-            : `特殊排名奖励｜提供者：${escapeHtml(r.provider_name || '-')} ${r.note ? '｜备注：'+escapeHtml(r.note) : ''}`}
-        </div>
-      </td>
-      <td><span class="pill warn">${escapeHtml(r.status || '未兑现')}</span></td>
-    </tr>
-  `).join('') || '<tr><td colspan="3" class="small">该奖励暂无未兑现名单</td></tr>';
-}
-
-function unfulfilledToCsv(rows){
-  const headers=['type','rank','user_name','event_name','reward_name','amount','threshold','provider_name','status','note'];
-  const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
-  return [headers.join(','), ...rows.map(r=>headers.map(h=>esc(r[h])).join(','))].join('\n');
-}
-
-function unfulfilledToText(rows){
-  const eventName=document.getElementById('unfulfilledEventSelect')?.value || '';
-  const rewardName=document.getElementById('unfulfilledRewardSelect')?.value || '';
-  if(!rows.length) return `${eventName}｜${rewardName}\n暂无未兑现名单`;
-  return [
-    `${eventName}｜${rewardName}｜未兑现名单（${rows.length}人）`,
-    ...rows.map((r,i)=>{
-      if(r.type==='金额门槛奖励'){
-        return `${i+1}. ${r.user_name}｜${r.rank ? '#'+r.rank : ''}｜PK金额 ${fmt(r.amount)}｜门槛 ${fmt(r.threshold)}`;
-      }
-      return `${i+1}. ${r.user_name}｜${r.rank || ''}｜特殊排名奖励｜提供者：${r.provider_name || '-'}｜状态：${r.status || '-'}${r.note ? '｜备注：'+r.note : ''}`;
-    })
-  ].join('\n');
-}
 
 function downloadText(filename, text, mime='text/plain;charset=utf-8'){
   const blob=new Blob([text],{type:mime});
@@ -3121,9 +3406,6 @@ document.getElementById('addSpecialRankBtn').onclick=async()=>{
 
 
 
-const refreshUnfulfilledBtn=document.getElementById('refreshUnfulfilledBtn');
-if(refreshUnfulfilledBtn) refreshUnfulfilledBtn.onclick=renderUnfulfilledAdmin;
-
 const rewardProgressName=document.getElementById('rewardProgressName');
 if(rewardProgressName) rewardProgressName.onchange=renderRewardProgressAdmin;
 const rewardProgressProvider=document.getElementById('rewardProgressProvider');
@@ -3142,6 +3424,19 @@ const rewardChoiceSearch=document.getElementById('rewardChoiceSearch');
 if(rewardChoiceSearch) rewardChoiceSearch.oninput=renderRewardChoiceAdmin;
 const rewardChoiceFilter=document.getElementById('rewardChoiceFilter');
 if(rewardChoiceFilter) rewardChoiceFilter.onchange=renderRewardChoiceAdmin;
+
+const unifiedImportKind=document.getElementById('unifiedImportKind');
+if(unifiedImportKind) unifiedImportKind.onchange=()=>syncUnifiedImportUi({reset:true});
+const previewUnifiedExcelBtn=document.getElementById('previewUnifiedExcelBtn');
+if(previewUnifiedExcelBtn) previewUnifiedExcelBtn.onclick=()=>previewOrderExcel(activeImportKind());
+const applyUnifiedExcelEditBtn=document.getElementById('applyUnifiedExcelEditBtn');
+if(applyUnifiedExcelEditBtn) applyUnifiedExcelEditBtn.onclick=()=>applyExcelPreviewEdits(activeImportKind());
+const confirmUnifiedExcelBtn=document.getElementById('confirmUnifiedExcelBtn');
+if(confirmUnifiedExcelBtn) confirmUnifiedExcelBtn.onclick=()=>confirmExcelImport(activeImportKind());
+const addManualUnifiedRowBtn=document.getElementById('addManualUnifiedRowBtn');
+if(addManualUnifiedRowBtn) addManualUnifiedRowBtn.onclick=()=>addManualImportRow(activeImportKind());
+const importUnifiedCsvBtn=document.getElementById('importUnifiedCsvBtn');
+if(importUnifiedCsvBtn) importUnifiedCsvBtn.onclick=()=>importCsvByKind(activeImportKind());
 
 const previewPkExcelBtn=document.getElementById('previewPkExcelBtn');
 if(previewPkExcelBtn) previewPkExcelBtn.onclick=()=>previewOrderExcel('pk');
@@ -3194,10 +3489,11 @@ if(importRuleBtn) importRuleBtn.onclick=submitRuleRows;
 
 const copyUnfulfilledBtn=document.getElementById('copyUnfulfilledBtn');
 if(copyUnfulfilledBtn) copyUnfulfilledBtn.onclick=async()=>{
-  const text=unfulfilledToText(getUnfulfilledRewards());
+  const rows=currentRewardAdminRows.filter(r=>!r.fulfilled);
+  const text=rewardRowsToText(rows);
   try{
     await navigator.clipboard.writeText(text);
-    alert('已复制未兑现清单');
+    alert(`已复制 ${rows.length} 条当前未兑现清单`);
   }catch(e){
     alert('复制失败，请改用导出CSV');
   }
@@ -3205,8 +3501,9 @@ if(copyUnfulfilledBtn) copyUnfulfilledBtn.onclick=async()=>{
 
 const downloadUnfulfilledBtn=document.getElementById('downloadUnfulfilledBtn');
 if(downloadUnfulfilledBtn) downloadUnfulfilledBtn.onclick=()=>{
-  const csv='\ufeff'+unfulfilledToCsv(getUnfulfilledRewards());
-  downloadText('未兑现奖励总表.csv', csv, 'text/csv;charset=utf-8');
+  const rows=currentRewardAdminRows.filter(r=>!r.fulfilled);
+  const csv='\ufeff'+rewardRowsToCsv(rows);
+  downloadText('当前筛选未兑现奖励.csv', csv, 'text/csv;charset=utf-8');
 };
 
 const saveAnnouncementBtn=document.getElementById('saveAnnouncementBtn');
@@ -3289,7 +3586,7 @@ document.getElementById('addAliasBtn').onclick=async()=>{
   if(!alias_name||!canonical_name){document.getElementById('aliasStatus').textContent='请填写别名和统一名称';return;}
   const res=await sb.from('name_aliases').upsert({alias_name,canonical_name},{onConflict:'alias_name'});
   document.getElementById('aliasStatus').textContent=res.error?'保存失败：'+res.error.message:'保存成功';
-  if(!res.error){await logOperation('upsert_name_alias', `${alias_name} => ${canonical_name}`, {alias_name,canonical_name}); await loadAll();}
+  if(!res.error){await logOperation('upsert_name_alias', `${alias_name} => ${canonical_name}`, {alias_name,canonical_name}); await loadAll(); await renderAliasAdmin();}
 };
 
 function unlockSiteAccess(){
@@ -3348,6 +3645,7 @@ async function loadSiteSettings(){
 }
 
 function requireSiteAccess(){
+  if(IS_ADMIN_PAGE) return Promise.resolve();
   const grant=parseAccessGrant();
   if(grant?.password_hash===siteSettings.access_password_hash && Number(grant?.expires_at)>Date.now()){
     unlockSiteAccess();
@@ -3389,5 +3687,6 @@ function requireSiteAccess(){
   await requireSiteAccess();
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
+  if(IS_ADMIN_PAGE) updateAuthUI();
   await loadAll();
 })();

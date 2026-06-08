@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>周童玥应援会数据站</title>
+<title>周童玥应援会数据站后台</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="styles/base.css" />
@@ -13,7 +13,7 @@
 <link rel="stylesheet" href="styles/table.css" />
 <link rel="stylesheet" href="styles/mobile.css" />
 </head>
-<body class="accessLocked">
+<body class="adminPage">
 <div class="accessGate" id="accessGate" aria-modal="true" role="dialog">
   <form class="accessPanel" id="accessForm">
     <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
@@ -26,7 +26,6 @@
 </div>
 <header class="siteHero">
   <div class="siteVersion">v1.1 测试版</div>
-  <a class="adminEntryLink" href="admin.html">管理员入口</a>
   <div class="wrap heroInner">
     <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
     <h1 id="title">周童玥应援会数据站</h1>
@@ -112,14 +111,14 @@
   </div>
 </div>
 
-<div class="modal" id="adminModal">
+<div class="adminApp" id="adminModal">
   <div class="panel">
     <div class="adminModalHeader">
       <div>
         <h2 class="adminPanelTitle">管理员后台</h2>
         <div class="small">登录后可修改云端数据。</div>
       </div>
-      <button class="btn" id="closeAdmin">关闭</button>
+      <a class="btn" id="closeAdmin" href="index.html">返回前台</a>
     </div>
 
     <div id="loginBox" class="adminLoginBox">
@@ -139,12 +138,17 @@
 
       <div class="adminShell">
       <div class="tabs">
+        <div class="adminSidebarBrand">
+          <b>Data Ops</b>
+          <span>周童玥应援会数据站后台</span>
+        </div>
         <span class="adminGroupLabel">后台导航</span>
         <button class="tab active" data-admin-tab="adminOverview">工作台</button>
         <button class="tab" data-admin-tab="dataAdmin">数据管理</button>
         <button class="tab" data-admin-tab="rewardCenter">奖励中心</button>
         <button class="tab" data-admin-tab="contentCenter">内容互动</button>
         <button class="tab" data-admin-tab="systemCenter">系统记录</button>
+        <a class="tab adminBackLink" href="index.html">返回前台</a>
       </div>
 
       <div class="adminWorkspace">
@@ -157,9 +161,28 @@
         </div>
       </div>
 
-      <div class="adminSection rewardModule" id="rewardAdmin" data-admin-group="rewardCenter">
-        <h3>奖励兑现管理</h3>
-        <div class="adminLead">集中处理普通奖励兑现状态。搜索用户、场次或奖励后，可直接标记已兑现或未兑现。</div>
+      <div class="adminSection rewardHubSection" id="rewardHubAdmin" data-admin-group="rewardCenter">
+        <h3>奖励中心</h3>
+        <div class="adminLead">奖励中心按流程拆成待处理、规则配置、选择与制作、兑现工作台。先看待处理，再进入对应页面处理具体事项。</div>
+        <div class="rewardPanelNav" role="tablist" aria-label="奖励中心分类">
+          <button class="btn rewardPanelBtn active" data-reward-panel="tasks" type="button">待处理</button>
+          <button class="btn rewardPanelBtn" data-reward-panel="rules" type="button">规则配置</button>
+          <button class="btn rewardPanelBtn" data-reward-panel="workflow" type="button">选择与制作</button>
+          <button class="btn rewardPanelBtn" data-reward-panel="fulfillment" type="button">兑现工作台</button>
+        </div>
+      </div>
+
+      <div class="adminSection rewardModule rewardPanelSection rewardPanelActive" id="rewardTaskAdmin" data-admin-group="rewardCenter" data-reward-panel="tasks">
+        <h3>奖励待处理</h3>
+        <div class="adminLead">这里只放奖励相关的待处理事项。点击卡片会切换到对应页面，并保留原有处理逻辑。</div>
+        <div class="adminTaskGrid rewardTaskGrid" id="rewardTaskGrid">
+          <div class="small">打开奖励中心后将自动生成待处理入口。</div>
+        </div>
+      </div>
+
+      <div class="adminSection rewardModule rewardPanelSection" id="rewardAdmin" data-admin-group="rewardCenter" data-reward-panel="fulfillment">
+        <h3>兑现工作台</h3>
+        <div class="adminLead">集中处理奖励兑现状态。搜索用户、场次或奖励后，可直接标记已兑现或未兑现，也可以批量更新。</div>
         <div class="adminSubhead">按 ID 快速兑现</div>
         <div class="formGrid adminFilterBar">
           <input id="quickFulfillName" list="nameOptions" type="search" placeholder="输入 ID，查看该 ID 奖励状态">
@@ -171,10 +194,39 @@
           <div class="small">输入 ID 后，会显示该 ID 的奖励兑现状态，并优先排列未兑现奖励。</div>
         </div>
         <div class="adminSubhead">完整奖励列表</div>
-        <div class="formGrid adminFilterBar">
+        <div class="formGrid adminFilterBar rewardListFilters">
           <input id="rewardSearch" type="search" placeholder="搜索用户名 / 场次 / 奖励">
+          <select id="rewardFulfillmentFilter">
+            <option value="all">全部兑现状态</option>
+            <option value="unfulfilled">仅看未兑现</option>
+            <option value="fulfilled">仅看已兑现</option>
+          </select>
+          <select id="rewardSourceFilter">
+            <option value="all">全部来源</option>
+            <option value="pk">总选奖励</option>
+            <option value="birth">生公奖励</option>
+            <option value="special">特殊奖励</option>
+          </select>
+          <select id="rewardEventFilter">
+            <option value="all">全部场次 / 分组</option>
+          </select>
+          <select id="rewardNameFilter">
+            <option value="all">全部奖励</option>
+          </select>
+          <select id="rewardChoiceStateFilter">
+            <option value="all">全部选择状态</option>
+            <option value="pending">待选择</option>
+            <option value="selected">已选择</option>
+            <option value="needs_progress">待编辑进度</option>
+            <option value="no_choice">无需选择</option>
+          </select>
           <input id="rewardDate" type="text" placeholder="兑现日期，例如 5.18">
           <button class="btn" id="reloadRewards">刷新列表</button>
+        </div>
+        <div class="row adminControlRow adminFilterBar">
+          <span class="pill" id="rewardListCountPill">当前 0 条</span>
+          <button class="btn" id="copyUnfulfilledBtn" type="button">复制当前未兑现</button>
+          <button class="btn good" id="downloadUnfulfilledBtn" type="button">导出当前未兑现CSV</button>
         </div>
         <div class="formGrid adminFilterBar rewardBatchBar">
           <select id="rewardBatchFilter">
@@ -188,12 +240,12 @@
           </select>
           <button class="btn good" id="applyRewardBatchBtn" type="button">批量更新</button>
         </div>
-        <div class="small">未兑现会优先显示。批量操作会作用于当前搜索结果，可先搜索某个奖励名称后再批量更新。</div>
+        <div class="small">未兑现会优先显示。批量操作会作用于当前筛选结果，可先筛选场次、奖励或状态后再批量更新。</div>
         <div class="list adminTableWrap"><table class="table"><thead><tr><th><input id="rewardSelectAll" type="checkbox" aria-label="选择全部奖励"></th><th>状态</th><th>用户 / 场次 / 奖励</th><th>操作</th></tr></thead><tbody id="rewardAdminBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection rewardModule" id="rewardProgressAdmin" data-admin-group="rewardCenter">
-        <h3>奖励制作进度</h3>
+      <div class="adminSection rewardModule rewardPanelSection" id="rewardProgressAdmin" data-admin-group="rewardCenter" data-reward-panel="workflow">
+        <h3>制作进度</h3>
         <div class="small">自动列出已导入的奖励名称。这里维护的是奖励整体制作状态，前台用户查询奖励时会同步看到。</div>
         <div class="formGrid">
           <select id="rewardProgressName"></select>
@@ -220,8 +272,8 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>奖励</th><th>当前进度</th><th>说明</th></tr></thead><tbody id="rewardProgressBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection rewardModule" id="rewardChoiceAdmin" data-admin-group="rewardCenter">
-        <h3>奖励选择管理</h3>
+      <div class="adminSection rewardModule rewardPanelSection" id="rewardChoiceAdmin" data-admin-group="rewardCenter" data-reward-panel="workflow">
+        <h3>奖励选择</h3>
         <div class="adminLead">用于维护二选一或多选一奖励。先选择奖励并填写可选项，再在待选择名单中为每位用户保存具体选择。</div>
         <div class="formGrid">
           <select id="choiceOptionReward"></select>
@@ -246,80 +298,102 @@
         <div class="list adminTableWrap"><table class="table choiceTable"><thead><tr><th>状态</th><th>用户 / 奖励</th><th>选择</th></tr></thead><tbody id="rewardChoiceBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection" id="eventAdmin" data-admin-group="dataAdmin">
-        <h3>新增 PK 场次</h3>
-        <div class="formGrid adminFilterBar">
-          <input id="newEventName" placeholder="场次名称">
-          <input id="newEventDate" placeholder="日期，例如 6.1-6.2">
-          <input id="newEventOrder" type="number" placeholder="排序，例如 5">
+      <div class="adminSection dataHubSection" id="dataHubAdmin" data-admin-group="dataAdmin">
+        <h3>数据管理</h3>
+        <div class="adminLead">这里集中处理总选 PK、生公数据和名称合并。优先使用“数据导入”，导出和名称清洗放在独立页面里，避免操作时互相干扰。</div>
+        <div class="dataPanelNav" role="tablist" aria-label="数据管理分类">
+          <button class="btn dataPanelBtn active" data-data-panel="import" type="button">数据导入</button>
+          <button class="btn dataPanelBtn" data-data-panel="events" type="button">场次与导出</button>
+          <button class="btn dataPanelBtn" data-data-panel="aliases" type="button">名称合并</button>
         </div>
-        <button class="btn good" id="addEventBtn">新增场次</button>
-        <div class="status" id="eventAdminStatus"></div>
       </div>
 
-      <div class="adminSection" id="pkImportAdmin" data-admin-group="dataAdmin">
-        <h3>导入 PK 数据</h3>
-        <div class="adminLead">首选上传微店订单 Excel，系统会识别收货人和实付金额；CSV 作为备用导入方式。</div>
-        <div class="formGrid">
-          <select id="pkExcelEvent"></select>
-          <input id="pkExcelFile" type="file" accept=".xlsx,.xls,.csv">
-          <button class="btn" id="previewPkExcelBtn" type="button">识别微店订单</button>
-        </div>
-        <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只排除已取消订单，同一名称会合并金额。</div>
-        <div id="pkExcelPreview" class="excelPreview hidden"></div>
-        <div class="manualImportBox">
-          <div class="adminSubhead">手动新增识别行</div>
-          <div class="formGrid adminFilterBar">
-            <input id="manualPkName" list="nameOptions" placeholder="名称 / ID">
-            <input id="manualPkAmount" type="number" step="0.01" placeholder="金额">
-            <button class="btn" id="addManualPkRowBtn" type="button">加入预览表</button>
+      <div class="adminSection dataPanelSection" id="eventAdmin" data-admin-group="dataAdmin" data-data-panel="events">
+        <h3>场次与导出</h3>
+        <div class="adminLead">维护总选 PK 场次基础信息，并导出已经导入的总选单场数据或生公总数据。</div>
+        <div class="dataSplitGrid">
+          <div class="dataWorkbenchCard">
+            <div class="adminSubhead">新增总选 PK 场次</div>
+            <div class="formGrid adminFilterBar">
+              <input id="newEventName" placeholder="场次名称">
+              <input id="newEventDate" placeholder="日期，例如 6.1-6.2">
+              <input id="newEventOrder" type="number" placeholder="排序，例如 5">
+            </div>
+            <button class="btn good" id="addEventBtn">新增场次</button>
+            <div class="status" id="eventAdminStatus"></div>
+          </div>
+
+          <div class="dataWorkbenchCard">
+            <div class="adminSubhead">导出数据</div>
+            <div class="formGrid adminFilterBar">
+              <select id="pkExportEvent"></select>
+              <button class="btn" id="exportPkEventBtn" type="button">导出总选单场 Excel</button>
+              <button class="btn" id="exportBirthDataBtn" type="button">导出生公 Excel</button>
+            </div>
+            <div class="small">导出的 Excel 会按序号、名称、金额排版，自动分成左右两列，并按金额从高到低排序。</div>
+            <div class="status" id="dataExportStatus"></div>
           </div>
         </div>
-        <button class="btn hidden" id="applyPkExcelEditBtn" type="button">应用手动调整</button>
-        <button class="btn good hidden" id="confirmPkExcelBtn" type="button">确认导入识别数据</button>
-        <textarea id="pkCsv" placeholder="event_name,user_name,amount&#10;春日踏青,波克布林,334.8"></textarea>
-        <button class="btn good" id="importPkBtn">导入 PK 数据</button>
-        <div class="status" id="pkImportStatus"></div>
-        <div class="adminSubhead">导出单场 PK 数据</div>
-        <div class="formGrid adminFilterBar">
-          <select id="pkExportEvent"></select>
-          <button class="btn" id="exportPkEventBtn" type="button">导出 Excel</button>
-        </div>
-        <div class="small">导出的 Excel 会按序号、名称、金额排版，自动分成左右两列，并按金额从高到低排序。</div>
-      </div>
-
-      <div class="adminSection" id="birthImportAdmin" data-admin-group="dataAdmin">
-        <h3>导入生公数据</h3>
-        <div class="adminLead">首选上传微店订单 Excel，系统会识别收货人和实付金额；CSV 作为备用导入方式。</div>
-        <div class="formGrid">
-          <input id="birthExcelBatch" placeholder="批次名称，例如 5.16生公">
-          <input id="birthExcelFile" type="file" accept=".xlsx,.xls,.csv">
-          <button class="btn" id="previewBirthExcelBtn" type="button">识别微店订单</button>
-        </div>
-        <div class="small">上传微店订单 Excel 后，会自动识别名称、金额和订单状态，只排除已取消订单，同一名称会合并金额。</div>
-        <div id="birthExcelPreview" class="excelPreview hidden"></div>
-        <div class="manualImportBox">
-          <div class="adminSubhead">手动新增识别行</div>
-          <div class="formGrid adminFilterBar">
-            <input id="manualBirthName" list="nameOptions" placeholder="名称 / ID">
-            <input id="manualBirthAmount" type="number" step="0.01" placeholder="金额">
-            <button class="btn" id="addManualBirthRowBtn" type="button">加入预览表</button>
+        <div class="dataWorkbenchCard dataEventListCard">
+          <div class="adminSubhead">已导入总选 PK 场次</div>
+          <div class="small">这里按场次排序展示当前已创建的总选 PK 场次，并统计每场已导入的人数和单场总额。</div>
+          <div class="list adminTableWrap">
+            <table class="table">
+              <thead><tr><th>场次</th><th>日期</th><th>排序</th><th>已导入人数</th><th>单场总额</th></tr></thead>
+              <tbody id="pkEventAdminBody"></tbody>
+            </table>
           </div>
         </div>
-        <button class="btn hidden" id="applyBirthExcelEditBtn" type="button">应用手动调整</button>
-        <button class="btn good hidden" id="confirmBirthExcelBtn" type="button">确认导入识别数据</button>
-        <textarea id="birthCsv" placeholder="user_name,amount,batch_name&#10;徐乐迪,50,5.16生公"></textarea>
-        <button class="btn good" id="importBirthBtn">导入生公数据</button>
-        <div class="status" id="birthImportStatus"></div>
-        <div class="adminSubhead">导出生公数据</div>
-        <div class="formGrid adminFilterBar">
-          <button class="btn" id="exportBirthDataBtn" type="button">导出 Excel</button>
-        </div>
-        <div class="small">导出的 Excel 会按序号、名称、金额排版，自动分成左右两列，并按金额从高到低排序。</div>
       </div>
 
-      <div class="adminSection rewardModule" id="ruleImportAdmin" data-admin-group="rewardCenter">
-        <h3>导入奖励规则</h3>
+      <div class="adminSection dataPanelSection dataImportSection dataPanelActive" id="unifiedImportAdmin" data-admin-group="dataAdmin" data-data-panel="import">
+        <h3>数据导入</h3>
+        <div class="adminLead">先选择导入类型，再上传微店订单 Excel。系统会识别收货人和实付金额，只排除已取消订单，同一名称会自动合并金额。</div>
+        <div class="dataImportPrimary">
+          <label class="adminField">
+            <span>导入类型</span>
+            <select id="unifiedImportKind">
+              <option value="pk">总选 PK</option>
+              <option value="birth">生公</option>
+            </select>
+          </label>
+          <label class="adminField unifiedPkTarget">
+            <span>总选 PK 场次</span>
+            <select id="pkExcelEvent"></select>
+          </label>
+          <label class="adminField unifiedBirthTarget hidden">
+            <span>生公批次</span>
+            <input id="birthExcelBatch" placeholder="批次名称，例如 5.16生公">
+          </label>
+          <label class="adminField">
+            <span>微店订单文件</span>
+            <input id="unifiedExcelFile" type="file" accept=".xlsx,.xls,.csv">
+          </label>
+          <button class="btn" id="previewUnifiedExcelBtn" type="button">识别微店订单</button>
+        </div>
+        <div id="unifiedExcelPreview" class="excelPreview hidden"></div>
+        <div class="manualImportBox">
+          <div class="adminSubhead">手动新增识别行</div>
+          <div class="dataManualGrid">
+            <input id="manualUnifiedName" list="nameOptions" placeholder="名称 / ID">
+            <input id="manualUnifiedAmount" type="number" step="0.01" placeholder="金额">
+            <button class="btn" id="addManualUnifiedRowBtn" type="button">加入预览表</button>
+          </div>
+        </div>
+        <div class="adminRowActions dataImportActions">
+          <button class="btn hidden" id="applyUnifiedExcelEditBtn" type="button">应用手动调整</button>
+          <button class="btn good hidden" id="confirmUnifiedExcelBtn" type="button">确认导入识别数据</button>
+        </div>
+        <details class="advancedBox dataAdvanced">
+          <summary>CSV 备用导入</summary>
+          <textarea id="unifiedCsv" placeholder="event_name,user_name,amount&#10;春日踏青,波克布林,334.8"></textarea>
+          <button class="btn good" id="importUnifiedCsvBtn" type="button">导入 CSV 数据</button>
+        </details>
+        <div class="status" id="unifiedImportStatus"></div>
+      </div>
+
+      <div class="adminSection rewardModule rewardPanelSection" id="ruleImportAdmin" data-admin-group="rewardCenter" data-reward-panel="rules">
+        <h3>普通奖励规则</h3>
         <div class="adminLead">先选择已经创建的 PK 场次，再填写金额门槛和对应奖励。每一行是一档奖励，提交后会同步该场次的奖励规则；删除表格中的已有行并提交，会删除对应旧规则。</div>
         <div class="formGrid two">
           <select id="ruleEventSelect"></select>
@@ -333,8 +407,8 @@
         <div class="status" id="ruleImportStatus"></div>
       </div>
 
-      <div class="adminSection rewardModule" id="specialRankAdmin" data-admin-group="rewardCenter">
-        <h3>特殊排名奖励</h3>
+      <div class="adminSection rewardModule rewardPanelSection" id="specialRankAdmin" data-admin-group="rewardCenter" data-reward-panel="rules">
+        <h3>特殊排名奖励配置</h3>
         <div class="small">用于记录由个人/外部提供、按单场排名发放且可能顺延的奖励。普通金额门槛奖励仍由 reward_rules 自动计算。</div>
         <div class="formGrid">
           <select id="specialEventName"></select>
@@ -365,24 +439,8 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>状态</th><th>特殊奖励</th><th>操作</th></tr></thead><tbody id="specialRankBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection rewardModule" id="unfulfilledAdmin" data-admin-group="rewardCenter">
-        <h3>未兑现奖励名单查询</h3>
-        <div class="small">选择 PK 场次和具体奖励，查看该奖励尚未兑现的名单。</div>
-        <div class="formGrid adminFilterBar">
-          <select id="unfulfilledEventSelect"></select>
-          <select id="unfulfilledRewardSelect"></select>
-          <button class="btn" id="refreshUnfulfilledBtn" type="button">刷新名单</button>
-        </div>
-        <div class="row adminControlRow adminFilterBar">
-          <span class="pill" id="unfulfilledCountPill">未兑现 0 人</span>
-          <button class="btn" id="copyUnfulfilledBtn" type="button">复制名单</button>
-          <button class="btn good" id="downloadUnfulfilledBtn" type="button">导出CSV</button>
-        </div>
-        <div class="list adminTableWrap"><table class="table"><thead><tr><th>排名/类型</th><th>用户 / 奖励</th><th>状态</th></tr></thead><tbody id="unfulfilledBody"></tbody></table></div>
-      </div>
-
-      <div class="adminSection" id="aliasAdmin" data-admin-group="dataAdmin">
-        <h3>名称别名管理</h3>
+      <div class="adminSection dataPanelSection" id="aliasAdmin" data-admin-group="dataAdmin" data-data-panel="aliases">
+        <h3>名称合并</h3>
         <div class="adminLead">用于把同一个人的不同写法合并统计。左侧填写订单里出现的写法，右侧填写最终展示和统计使用的统一名称。</div>
         <div class="aliasExample">
           <span class="pill">例如：Riute.</span>
@@ -395,6 +453,21 @@
         </div>
         <button class="btn good" id="addAliasBtn">保存名称合并规则</button>
         <div class="status" id="aliasStatus"></div>
+        <div class="adminSubhead">当前生效规则</div>
+        <div class="list adminTableWrap aliasRulesTable">
+          <table class="table">
+            <thead><tr><th>订单里的写法</th><th>统一名称</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody id="aliasRulesBody"></tbody>
+          </table>
+        </div>
+        <div class="adminSubhead">历史保存记录</div>
+        <div class="status" id="aliasHistoryStatus"></div>
+        <div class="list adminTableWrap aliasHistoryTable">
+          <table class="table">
+            <thead><tr><th>时间</th><th>合并关系</th><th>操作人</th></tr></thead>
+            <tbody id="aliasHistoryBody"></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="adminSection contentModule" id="announcementAdmin" data-admin-group="contentCenter">

@@ -15,6 +15,13 @@
     padding:4px 8px;
     font-size:10px;
   }
+  .adminEntryLink{
+    top:36px;
+    right:12px;
+    min-height:22px;
+    padding:4px 8px;
+    font-size:10px;
+  }
   .heroEyebrow{
     font-size:11px;
     margin-bottom:6px;
@@ -504,6 +511,9 @@
   .adminTopBar{
     padding:10px 14px;
   }
+  .adminPage .adminTopBar{
+    position:static;
+  }
   .adminShell{
     grid-template-columns:1fr;
     min-height:auto;
@@ -517,6 +527,10 @@
     margin:10px;
     border-right:0;
   }
+  .adminPage .tabs{
+    position:static;
+    min-height:auto;
+  }
   .tab{
     width:auto;
     min-height:40px;
@@ -524,7 +538,19 @@
     border-radius:999px;
   }
   .adminWorkspace{
+    grid-template-columns:1fr;
     padding:10px;
+  }
+  .adminPage .adminWorkspace > .dataImportSection.dataPanelActive,
+  .adminPage .adminWorkspace > .adminSection{
+    grid-column:1 / -1;
+  }
+  .adminPage .dataPanelNav,
+  .adminPage .rewardPanelNav,
+  .adminPage .dataSplitGrid,
+  .adminPage .dataImportPrimary,
+  .adminPage .dataManualGrid{
+    grid-template-columns:1fr;
   }
   .adminGroupLabel{
     flex-basis:100%;

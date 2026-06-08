@@ -51,6 +51,30 @@ header{padding:22px 18px 16px;background:linear-gradient(135deg,#fff,#fff9e8 58%
   line-height:1;
   box-shadow:0 8px 18px rgba(150,102,20,.08);
 }
+.adminEntryLink{
+  position:absolute;
+  top:16px;
+  right:120px;
+  z-index:1;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:24px;
+  padding:4px 10px;
+  border:1px solid #ead28b;
+  border-radius:999px;
+  background:rgba(255,255,255,.78);
+  color:#8a5b00;
+  font-size:12px;
+  font-weight:850;
+  line-height:1;
+  text-decoration:none;
+  box-shadow:0 8px 18px rgba(150,102,20,.08);
+}
+.adminEntryLink:hover{
+  background:#fff7da;
+  color:#7a4e00;
+}
 .siteHero::after{
   content:"";
   position:absolute;
