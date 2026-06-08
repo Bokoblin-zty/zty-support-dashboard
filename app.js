@@ -1073,12 +1073,54 @@ function lotteryTypeLabel(type){
     other:'其他抽奖'
   }[type] || '抽奖';
 }
+function lotteryPoolEntries(value){
+  if(Array.isArray(value)) return value;
+  if(value && typeof value==='object'){
+    return Array.isArray(value.entries) ? value.entries
+      : (Array.isArray(value.pool) ? value.pool
+      : (Array.isArray(value.items) ? value.items : []));
+  }
+  return [];
+}
+function positiveNumber(value){
+  const n=Number(String(value ?? '').replace(/,/g,'').trim());
+  return Number.isFinite(n) && n>0 ? n : null;
+}
+function lotteryMetaThreshold(record,pool){
+  const winners=record.winners_json && typeof record.winners_json==='object' && !Array.isArray(record.winners_json) ? record.winners_json : {};
+  const poolMeta=record.pool_json && typeof record.pool_json==='object' && !Array.isArray(record.pool_json) ? record.pool_json : {};
+  const candidates=[
+    record.threshold,
+    record.lottery_threshold,
+    record.rule_threshold,
+    winners.threshold,
+    winners.lottery_threshold,
+    winners.meta?.threshold,
+    poolMeta.threshold,
+    poolMeta.lottery_threshold,
+    poolMeta.meta?.threshold,
+    pool[0]?.lottery_threshold,
+    pool[0]?.threshold,
+    pool[0]?.rule_threshold
+  ];
+  for(const value of candidates){
+    const n=positiveNumber(value);
+    if(n!==null) return n;
+  }
+  const rule=String(record.rule_text || '');
+  const match=rule.match(/达到\s*([0-9]+(?:\.[0-9]+)?)/) || rule.match(/([0-9]+(?:\.[0-9]+)?)\s*元/);
+  if(match){
+    const n=positiveNumber(match[1]);
+    if(n!==null) return n;
+  }
+  const amounts=pool.map(x=>positiveNumber(x.amount)).filter(x=>x!==null);
+  return amounts.length ? Math.min(...amounts) : null;
+}
 function publicLotteryRule(record){
   const type=record.lottery_type;
-  const pool=Array.isArray(record.pool_json) ? record.pool_json : [];
+  const pool=lotteryPoolEntries(record.pool_json);
   if(type==='monthly' || type==='single'){
-    const amounts=pool.map(x=>num(x.amount)).filter(x=>Number.isFinite(x));
-    const threshold=amounts.length ? Math.min(...amounts) : null;
+    const threshold=lotteryMetaThreshold(record,pool);
     if(type==='monthly'){
       const month=(record.lottery_name || '').match(/\d{4}-\d{2}/)?.[0] || '';
       return `${month || '本月'}达到${threshold!==null?fmt(threshold):'对应'}门槛`;
@@ -1105,7 +1147,7 @@ function renderLotteryWinners(value){
   </div>`;
 }
 function renderLotteryPool(pool){
-  const list=Array.isArray(pool) ? pool : [];
+  const list=lotteryPoolEntries(pool);
   if(!list.length) return '';
   return `<details class="lotteryPool">
     <summary>查看奖池（${list.length} 个资格）</summary>
@@ -1224,7 +1266,9 @@ function buildLotteryPool(){
         name: row.name,
         event_name: event.event_name,
         event_date: event.event_date || '',
-        amount: row.amount
+        amount: row.amount,
+        lottery_threshold: threshold,
+        lottery_mode: mode
       });
     }
   }
@@ -1260,6 +1304,8 @@ async function drawLotteryFromPool(){
   if(!entries.length){status.textContent='请先生成或填写参与池';return;}
   const count=Math.max(1,Math.floor(num(document.getElementById('lotteryWinnerCount').value)||1));
   const prize=document.getElementById('lotteryPrizeText').value.trim();
+  const threshold=positiveNumber(document.getElementById('lotteryThreshold')?.value) || positiveNumber(entries[0]?.lottery_threshold);
+  const mode=document.getElementById('lotteryBuildMode')?.value || document.getElementById('lotteryType')?.value || '';
   for(let i=entries.length-1;i>0;i--){
     const j=Math.floor(Math.random()*(i+1));
     [entries[i],entries[j]]=[entries[j],entries[i]];
@@ -1272,7 +1318,15 @@ async function drawLotteryFromPool(){
     event_name:x.event_name || '',
     amount:x.amount || null
   }));
-  const result={drawn_at:new Date().toISOString(),winners};
+  const result={
+    drawn_at:new Date().toISOString(),
+    winners,
+    meta:{
+      threshold:threshold || null,
+      mode,
+      event_name:entries[0]?.event_name || ''
+    }
+  };
   document.getElementById('lotteryWinnersJson').value=jsonText(result);
   status.textContent=`已抽出 ${winners.length} 个结果：${winners.map(w=>w.name).join('、')}，正在直接生成抽奖记录...`;
   await saveLottery({keepForm:true,fromDraw:true});
