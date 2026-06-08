@@ -23,8 +23,8 @@ const VISIT_VIEW_LABELS = {
   questions:'匿名提问'
 };
 
-let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[] };
-let state = { view:'overview', event:'', user:null, questionFilter:'pending', dataAdminPanel:'import', rewardAdminPanel:'tasks', rewardProgressAvailable:true, rewardChoicesAvailable:true, visitLogsAvailable:true };
+let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[], rewardLedger:[] };
+let state = { view:'overview', event:'', user:null, questionFilter:'pending', dataAdminPanel:'import', rewardAdminPanel:'tasks', rewardProgressAvailable:true, rewardChoicesAvailable:true, rewardLedgerAvailable:true, visitLogsAvailable:true };
 let siteSettings = { access_password_hash: DEFAULT_SITE_ACCESS_PASSWORD_HASH, access_ttl_days: DEFAULT_SITE_ACCESS_TTL_DAYS, available:false };
 const IS_ADMIN_PAGE = document.body.classList.contains('adminPage');
 let pendingPkExcelRows = [];
@@ -115,7 +115,7 @@ const escapeHtml = s => String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'
 ========================= */
 async function loadAll(){
   // 一次性读取页面所需数据，并在进入渲染前完成名称统一和数字格式整理。
-  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards, announcements, lotteryRecords, rewardProgress, rewardChoiceOptions, rewardChoices] = await Promise.all([
+  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards, announcements, lotteryRecords, rewardProgress, rewardChoiceOptions, rewardChoices, rewardLedger] = await Promise.all([
     sb.from('pk_events').select('*').order('sort_order',{ascending:true}),
     sb.from('pk_records').select('*'),
     sb.from('birth_fund_records').select('*'),
@@ -129,7 +129,8 @@ async function loadAll(){
     sb.from('lottery_records').select('*').order('created_at',{ascending:false}),
     sb.from('reward_progress').select('*').order('reward_name',{ascending:true}),
     sb.from('reward_choice_options').select('*').order('reward_name',{ascending:true}),
-    sb.from('reward_choices').select('*')
+    sb.from('reward_choices').select('*'),
+    sb.from('reward_ledger').select('*')
   ]);
   for(const res of [events,records,birth,status,aliases,rewardRules,birthRewardRules,birthRewardStatus,specialRankRewards,announcements,lotteryRecords]){
     if(res.error){ alert('读取数据失败：'+res.error.message); console.error(res.error); }
@@ -139,6 +140,8 @@ async function loadAll(){
   state.rewardChoicesAvailable = !rewardChoiceOptions.error && !rewardChoices.error;
   if(rewardChoiceOptions.error) console.warn('reward_choice_options unavailable:', rewardChoiceOptions.error);
   if(rewardChoices.error) console.warn('reward_choices unavailable:', rewardChoices.error);
+  state.rewardLedgerAvailable = !rewardLedger.error;
+  if(rewardLedger.error) console.warn('reward_ledger unavailable:', rewardLedger.error);
   DATA.aliases = aliases.data || [];
   const rawRecords = records.data || [];
   const rawBirthRecords = birth.data || [];
@@ -191,6 +194,7 @@ async function loadAll(){
   }));
   DATA.rewardChoiceOptions = rewardChoiceOptions.error ? [] : (rewardChoiceOptions.data || []);
   DATA.rewardChoices = rawRewardChoices.map(r=>({...r,user_name:canon(r.user_name)}));
+  DATA.rewardLedger = rewardLedger.error ? [] : (rewardLedger.data || []).map(r=>({...r,user_name:canon(r.user_name)}));
   DATA.specialRankRewards = rawSpecialRankRewards.map(r=>({
     ...r,
     target_rank: num(r.target_rank),
@@ -204,6 +208,7 @@ async function loadAll(){
   if(state.user){
     renderAdminOverview();
     renderRewardTaskAdmin();
+    renderRewardLedgerAdmin();
     renderAdminRewards();
     renderRewardProgressAdmin();
     renderRewardChoiceAdmin();
@@ -266,7 +271,7 @@ function birthByUser(){
 }
 function allNames(){
   const map=new Map();
-  [...DATA.records.map(r=>r.user_name), ...DATA.birthRecords.map(r=>r.user_name)].forEach(name=>{
+  [...DATA.records.map(r=>r.user_name), ...DATA.birthRecords.map(r=>r.user_name), ...DATA.specialRankRewards.map(r=>r.winner_name)].forEach(name=>{
     const display=canon(name);
     const key=nameKey(display);
     if(key) map.set(key,pickDisplayName(map.get(key),display));
@@ -497,6 +502,21 @@ function renderRewardProgressLine(rewardName){
   const label=providerType==='zhou_tongyue' ? '兑现状态' : '制作进度';
   return `<div class="small rewardProgressLine">${label}：<span class="pill ${progressStatusClass(status, providerType)}">${escapeHtml(status)}</span>${note}</div>`;
 }
+function renderLedgerRewardProgressLine(row){
+  const providerType=row.provider_type || inferRewardProviderType(null,row.display_reward_name || row.reward_name);
+  const label=providerType==='zhou_tongyue' ? '兑现状态' : '制作进度';
+  if(row.choice_required && row.choice_status==='pending'){
+    return `<div class="small rewardProgressLine">选择状态：<span class="pill warn">待选择</span></div><div class="small rewardProgressLine">${label}：<span class="pill warn">待选择</span></div>`;
+  }
+  const lines=[];
+  if(row.choice_required && row.selected_reward_name){
+    lines.push(`<div class="small rewardProgressLine">已选择：<span class="pill good">${escapeHtml(row.selected_reward_name)}</span></div>`);
+  }
+  const status=row.progress_status || (row.choice_required ? '待编辑' : '暂未更新');
+  const note=row.progress_note ? `｜${escapeHtml(row.progress_note)}` : '';
+  lines.push(`<div class="small rewardProgressLine">${label}：<span class="pill ${progressStatusClass(status, providerType)}">${escapeHtml(status)}</span>${note}</div>`);
+  return lines.join('');
+}
 function eventSortIndex(eventName){
   const event=DATA.events.find(e=>e.event_name===eventName);
   if(!event) return 9999;
@@ -619,6 +639,291 @@ async function syncRewardProgressCompleted(rewardName,rewardType=''){
   if(res.error){
     state.rewardProgressAvailable=false;
     console.warn('sync reward_progress failed:', res.error);
+  }
+}
+
+/* =========================
+   奖励台账映射层
+========================= */
+const REWARD_LEDGER_VERSION = 'stage1-readonly';
+
+function rewardLedgerKey(row){
+  return [
+    row.source_type || '',
+    row.source_id || '',
+    canon(row.user_name),
+    row.event_name || '',
+    row.reward_group || '',
+    row.reward_name || ''
+  ].join('||');
+}
+
+function rewardLedgerChoiceStatus(choiceInfo){
+  if(!choiceInfo) return 'not_required';
+  return choiceInfo.selected ? 'selected' : 'pending';
+}
+
+function rewardLedgerProgressFor(row, choiceInfo){
+  const progressRewardName = choiceInfo?.selected || row.reward_name;
+  return {
+    progress_reward_name:progressRewardName,
+    progress:progressForReward(progressRewardName)
+  };
+}
+
+function rewardLedgerWorkflowStatus({fulfilled, choice_status, progress}){
+  if(fulfilled) return 'completed';
+  if(choice_status === 'pending') return 'pending_choice';
+  if(choice_status === 'selected' && !progress) return 'needs_progress';
+  return 'pending_fulfillment';
+}
+
+function normalizeRewardLedgerRow(row){
+  const userName=canon(row.user_name);
+  const providerType=row.provider_type || inferRewardProviderType(null,row.reward_name);
+  const choiceInfo=rewardChoiceInfo(userName,row.source_type,row.event_name,row.reward_name);
+  const choiceStatus=rewardLedgerChoiceStatus(choiceInfo);
+  const {progress_reward_name, progress}=rewardLedgerProgressFor(row, choiceInfo);
+  const fulfilled=!!row.fulfilled;
+  return {
+    ledger_key:rewardLedgerKey({...row,user_name:userName}),
+    ledger_version:REWARD_LEDGER_VERSION,
+    source_type:row.source_type || 'other',
+    source_label:sourceTypeText(row.source_type),
+    source_table:row.source_table || '',
+    source_id:row.source_id || '',
+    user_name:userName,
+    event_name:row.event_name || '',
+    reward_group:row.reward_group || '',
+    reward_name:row.reward_name || '',
+    display_reward_name:choiceInfo?.selected || row.reward_name || '',
+    amount:num(row.amount),
+    provider_type:providerType,
+    provider_label:providerTypeText(providerType),
+    fulfilled,
+    fulfillment_status:fulfilled ? 'fulfilled' : 'unfulfilled',
+    fulfilled_date:row.fulfilled_date || '',
+    choice_required:!!choiceInfo,
+    choice_status:choiceStatus,
+    selected_reward_name:choiceInfo?.selected || '',
+    progress_reward_name,
+    progress_status:progress?.progress_status || '',
+    progress_note:progress?.progress_note || '',
+    workflow_status:rewardLedgerWorkflowStatus({fulfilled, choice_status:choiceStatus, progress}),
+    special_status:row.special_status || '',
+    note:row.note || ''
+  };
+}
+
+function buildRewardLedgerRows(){
+  const normalRows=[
+    ...allEarnedRewards().map(row=>({
+      ...row,
+      source_table:'reward_status',
+      reward_group:row.event_name
+    })),
+    ...allEarnedBirthRewards().map(row=>({
+      ...row,
+      source_table:'birth_reward_status'
+    })),
+    ...(DATA.specialRankRewards || []).map(row=>({
+      source_type:'special',
+      source_table:'special_rank_rewards',
+      source_id:row.id,
+      user_name:row.winner_name,
+      event_name:row.event_name || '特殊排名奖励',
+      reward_group:'特殊排名奖励',
+      reward_name:row.reward_name,
+      amount:0,
+      provider_type:row.provider_type || 'support_club',
+      fulfilled:!!row.fulfilled,
+      fulfilled_date:row.fulfilled_date || '',
+      special_status:row.status || '',
+      note:row.note || ''
+    }))
+  ];
+  return normalRows
+    .map(normalizeRewardLedgerRow)
+    .sort((a,b)=>
+      Number(a.fulfilled)-Number(b.fulfilled)
+      || String(a.source_label).localeCompare(String(b.source_label),'zh-Hans-CN')
+      || String(a.event_name).localeCompare(String(b.event_name),'zh-Hans-CN')
+      || String(a.reward_name).localeCompare(String(b.reward_name),'zh-Hans-CN')
+      || String(a.user_name).localeCompare(String(b.user_name),'zh-Hans-CN')
+    );
+}
+
+function rewardLedgerMetrics(rows=buildRewardLedgerRows()){
+  return {
+    total:rows.length,
+    unfulfilled:rows.filter(r=>!r.fulfilled).length,
+    pending_choice:rows.filter(r=>r.workflow_status==='pending_choice').length,
+    needs_progress:rows.filter(r=>r.workflow_status==='needs_progress').length,
+    completed:rows.filter(r=>r.workflow_status==='completed').length
+  };
+}
+
+function rewardLedgerRowForAdmin(row){
+  return {
+    ...row,
+    id:row.source_type==='special' ? row.source_id : row.id,
+    amount:num(row.amount),
+    fulfilled:!!row.fulfilled,
+    fulfilled_date:row.fulfilled_date || '',
+    provider_type:row.provider_type || inferRewardProviderType(null,row.display_reward_name || row.reward_name),
+    reward_group:row.reward_group || row.event_name || '',
+    display_reward_name:row.display_reward_name || row.selected_reward_name || row.reward_name,
+    selected_reward_name:row.selected_reward_name || '',
+    progress_status:row.progress_status || '',
+    workflow_status:row.workflow_status || '',
+    ledger_row:true
+  };
+}
+
+function rewardLedgerRowsForAdmin(){
+  const generatedRows=buildRewardLedgerRows();
+  if(state.rewardLedgerAvailable && DATA.rewardLedger.length){
+    const storedMap=new Map(DATA.rewardLedger.map(row=>[row.ledger_key,row]));
+    return generatedRows.map(row=>{
+      const stored=storedMap.get(row.ledger_key);
+      return rewardLedgerRowForAdmin(stored ? {...stored,...row,ledger_row:true,stored_synced_at:stored.synced_at || ''} : {...row,ledger_row:false});
+    });
+  }
+  return generatedRows.map(row=>rewardLedgerRowForAdmin({...row,ledger_row:false}));
+}
+
+const REWARD_LEDGER_COMPARE_FIELDS = [
+  'source_type','source_label','source_table','source_id','user_name','event_name','reward_group',
+  'reward_name','display_reward_name','amount','provider_type','provider_label','fulfilled',
+  'fulfillment_status','fulfilled_date','choice_required','choice_status','selected_reward_name',
+  'progress_reward_name','progress_status','progress_note','workflow_status','special_status','note'
+];
+
+function ledgerCompareValue(key, value){
+  if(key==='amount') return String(num(value));
+  if(typeof value === 'boolean') return value ? 'true' : 'false';
+  return String(value ?? '');
+}
+
+function compareRewardLedgerRows(generatedRows=buildRewardLedgerRows(), storedRows=DATA.rewardLedger || []){
+  const generatedMap=new Map(generatedRows.map(row=>[row.ledger_key,row]));
+  const storedMap=new Map(storedRows.map(row=>[row.ledger_key,row]));
+  let missing=0;
+  let changed=0;
+  let unchanged=0;
+  generatedRows.forEach(row=>{
+    const stored=storedMap.get(row.ledger_key);
+    if(!stored){
+      missing += 1;
+      return;
+    }
+    const isChanged=REWARD_LEDGER_COMPARE_FIELDS.some(key=>ledgerCompareValue(key,row[key]) !== ledgerCompareValue(key,stored[key]));
+    if(isChanged) changed += 1;
+    else unchanged += 1;
+  });
+  const stale=storedRows.filter(row=>!generatedMap.has(row.ledger_key)).length;
+  return {
+    generated:generatedRows.length,
+    stored:storedRows.length,
+    missing,
+    changed,
+    unchanged,
+    stale
+  };
+}
+
+function rewardLedgerPayload(row){
+  const payload={};
+  [
+    'ledger_key','ledger_version','source_type','source_label','source_table','source_id','user_name',
+    'event_name','reward_group','reward_name','display_reward_name','amount','provider_type',
+    'provider_label','fulfilled','fulfillment_status','fulfilled_date','choice_required',
+    'choice_status','selected_reward_name','progress_reward_name','progress_status','progress_note',
+    'workflow_status','special_status','note'
+  ].forEach(key=>{ payload[key]=row[key] ?? null; });
+  payload.synced_at=new Date().toISOString();
+  payload.updated_at=payload.synced_at;
+  return payload;
+}
+
+function renderRewardLedgerAdmin(){
+  const box=document.getElementById('rewardLedgerMetrics');
+  if(!box) return;
+  const status=document.getElementById('rewardLedgerStatus');
+  if(!state.rewardLedgerAvailable){
+    box.innerHTML='<div class="small">奖励台账表暂不可用，请确认 SQL 已执行。</div>';
+    if(status) status.textContent='奖励台账表不可用，当前后台仍使用旧奖励数据。';
+    return;
+  }
+  const generatedRows=buildRewardLedgerRows();
+  const metrics=rewardLedgerMetrics(generatedRows);
+  const diff=compareRewardLedgerRows(generatedRows);
+  const cards=[
+    ['可生成台账', diff.generated, '由当前旧数据实时计算'],
+    ['表内已有', diff.stored, '已同步进新台账的记录'],
+    ['待新增', diff.missing, '新表缺少的台账记录'],
+    ['待更新', diff.changed, '旧数据变化后需要刷新'],
+    ['旧表多余', diff.stale, '不会自动删除，只提示检查'],
+    ['未兑现', metrics.unfulfilled, '当前计算出的未兑现奖励']
+  ];
+  box.innerHTML=cards.map(([label,value,note])=>`
+    <div class="adminTaskCard ledgerMetricCard">
+      <span>${escapeHtml(label)}</span>
+      <b>${escapeHtml(value)}</b>
+      <small>${escapeHtml(note)}</small>
+    </div>
+  `).join('');
+  if(status){
+    status.textContent = diff.missing || diff.changed
+      ? `检测完成：有 ${diff.missing} 条待新增、${diff.changed} 条待更新。`
+      : `检测完成：台账已同步。${diff.stale ? `另有 ${diff.stale} 条旧表多余记录，未自动删除。` : ''}`;
+  }
+}
+
+async function syncRewardLedgerAdmin(){
+  const status=document.getElementById('rewardLedgerStatus');
+  if(!state.rewardLedgerAvailable){
+    if(status) status.textContent='奖励台账表不可用，请确认 SQL 已执行。';
+    return;
+  }
+  const rows=buildRewardLedgerRows();
+  if(!rows.length){
+    if(status) status.textContent='当前没有可同步的奖励台账记录。';
+    return;
+  }
+  if(status) status.textContent=`正在同步 ${rows.length} 条奖励台账...`;
+  const payloads=rows.map(rewardLedgerPayload);
+  const errors=[];
+  for(let i=0;i<payloads.length;i+=400){
+    const chunk=payloads.slice(i,i+400);
+    const res=await sb.from('reward_ledger').upsert(chunk,{onConflict:'ledger_key'});
+    if(res.error) errors.push(res.error.message);
+  }
+  if(errors.length){
+    if(status) status.textContent=`同步失败：${errors[0]}`;
+    return;
+  }
+  await logOperation('sync_reward_ledger', `同步 ${rows.length} 条奖励台账`, {count:rows.length});
+  if(status) status.textContent=`同步成功：${rows.length} 条奖励台账。`;
+  await loadAll();
+  renderRewardLedgerAdmin();
+}
+
+async function syncFulfillmentToRewardLedger(row,nextFulfilled,date){
+  if(!state.rewardLedgerAvailable || !row) return;
+  const ledgerRow = normalizeRewardLedgerRow({
+    ...row,
+    source_id:row.source_id || row.id || '',
+    fulfilled:nextFulfilled,
+    fulfilled_date:date || ''
+  });
+  if(nextFulfilled){
+    ledgerRow.progress_status=ledgerRow.provider_type==='zhou_tongyue' ? '已兑现' : '已完结';
+    ledgerRow.workflow_status='completed';
+  }
+  const res=await sb.from('reward_ledger').upsert(rewardLedgerPayload(ledgerRow),{onConflict:'ledger_key'});
+  if(res.error){
+    console.warn('sync fulfillment to reward_ledger failed:', res.error);
   }
 }
 
@@ -1332,11 +1637,125 @@ function renderPersonalLookup(name,candidates,out){
     <div class="small lookupNote">个人🍊合计：${fmt(pkTotal+bTotal)}。该合计仅供个人查询参考，不参与总选排名。</div>
     <div class="eventAmountList">
       ${pkRows.map(r=>`<div class="eventAmountItem"><div><b>${escapeHtml(r.name)}</b><div class="small">${escapeHtml(r.date||'')}</div></div><div class="amt">${fmt(r.amount)}</div></div>`).join('')}
-      <div class="eventAmountItem"><div><b>生公专项</b><div class="small">独立统计，不计入总选</div></div><div class="amt">${fmt(bTotal)}</div></div>
-    </div>`;
+	      <div class="eventAmountItem"><div><b>生公专项</b><div class="small">独立统计，不计入总选</div></div><div class="amt">${fmt(bTotal)}</div></div>
+	    </div>`;
 }
 
+function rewardLookupLedgerRowsForUser(name){
+  const key=nameKey(canon(name));
+  if(!key) return [];
+  const sourceOrder={pk:1,birth:2,special:3};
+  return rewardLedgerRowsForAdmin()
+    .filter(row=>nameKey(row.user_name)===key)
+    .sort((a,b)=>
+      (sourceOrder[a.source_type] || 9) - (sourceOrder[b.source_type] || 9)
+      || (a.source_type==='pk' ? eventSortIndex(a.event_name)-eventSortIndex(b.event_name) : 0)
+      || String(a.event_name || a.reward_group || '').localeCompare(String(b.event_name || b.reward_group || ''),'zh-Hans-CN')
+      || String(a.reward_name || '').localeCompare(String(b.reward_name || ''),'zh-Hans-CN')
+    );
+}
+function rewardLedgerThreshold(row){
+  if(row.source_type==='pk'){
+    const rule=DATA.rewardRules.find(r=>r.event_name===row.event_name && r.reward_name===row.reward_name);
+    return rule ? num(rule.threshold) : null;
+  }
+  if(row.source_type==='birth'){
+    const rule=DATA.birthRewardRules.find(r=>(r.reward_group || '生公')===(row.reward_group || row.event_name || '生公') && r.reward_name===row.reward_name);
+    return rule ? num(rule.threshold) : null;
+  }
+  return null;
+}
+function rewardLookupGroupKey(row){
+  if(row.source_type==='pk') return `pk||${row.event_name || '总选奖励'}`;
+  if(row.source_type==='birth') return `birth||${row.reward_group || row.event_name || '生公奖励'}`;
+  return `special||特殊排名奖励`;
+}
+function rewardLookupGroupTitle(row){
+  if(row.source_type==='pk') return row.event_name || '总选奖励';
+  if(row.source_type==='birth') return `生公奖励 · ${row.reward_group || row.event_name || '生公'}`;
+  return '特殊排名奖励';
+}
+function rewardLookupGroupNote(rows){
+  const first=rows[0] || {};
+  if(first.source_type==='pk') return `单场金额 ${fmt(first.amount)}`;
+  if(first.source_type==='birth') return `生公合计 ${fmt(first.amount)}`;
+  return `${rows.length} 项`;
+}
+function rewardLookupFulfillmentPill(row){
+  return row.fulfilled
+    ? `<span class="pill good">已兑现${row.fulfilled_date?' '+escapeHtml(row.fulfilled_date):''}</span>`
+    : `<span class="pill warn">未兑现</span>`;
+}
+function renderLedgerRewardItem(row){
+  const displayName=row.display_reward_name || row.selected_reward_name || row.reward_name;
+  const threshold=rewardLedgerThreshold(row);
+  const special=row.source_type==='special' ? DATA.specialRankRewards.find(r=>String(r.id)===String(row.source_id)) : null;
+  const sourceLine = row.source_type==='special'
+    ? `${escapeHtml(row.event_name || '未关联场次')}${special?.target_rank ? ` ｜ 原定第${escapeHtml(special.target_rank)}名` : ''}${special?.provider_name ? ` ｜ 提供者：${escapeHtml(special.provider_name)}` : ''}`
+    : `${escapeHtml(sourceTypeText(row.source_type))}${row.event_name ? ` ｜ ${escapeHtml(row.event_name)}` : ''}`;
+  const originalLine = row.choice_required && row.selected_reward_name && row.selected_reward_name!==row.reward_name
+    ? `<div class="small">原奖励：${escapeHtml(row.reward_name)}</div>`
+    : '';
+  const thresholdLine = threshold!==null ? `<div class="small">达标金额：${fmt(threshold)}</div>` : '';
+  const noteLine = row.note ? `<div class="small">备注：${escapeHtml(row.note)}</div>` : '';
+  const statusLine = row.source_type==='special' && row.special_status ? specialStatusPill(row.special_status) : '';
+  return `<div class="rewardItem">
+    <div>
+      <b>${escapeHtml(displayName)}</b>
+      <div class="small">${sourceLine}</div>
+      ${thresholdLine}
+      ${originalLine}
+      ${noteLine}
+      ${renderLedgerRewardProgressLine(row)}
+    </div>
+    <div>${statusLine}${rewardLookupFulfillmentPill(row)}</div>
+  </div>`;
+}
+function renderLedgerRewardGroups(rows,emptyHtml){
+  if(!rows.length) return emptyHtml;
+  const groups=new Map();
+  rows.forEach(row=>{
+    const key=rewardLookupGroupKey(row);
+    if(!groups.has(key)) groups.set(key,[]);
+    groups.get(key).push(row);
+  });
+  return [...groups.values()].map(groupRows=>{
+    const first=groupRows[0] || {};
+    return `<details class="rewardDetails">
+      <summary><span>${escapeHtml(rewardLookupGroupTitle(first))}<span class="small rewardDetailHint">点击查看详情</span></span><span>${escapeHtml(rewardLookupGroupNote(groupRows))}</span></summary>
+      <div class="rewardList">${groupRows.map(renderLedgerRewardItem).join('')}</div>
+    </details>`;
+  }).join('');
+}
+function renderLedgerRewardLookup(name,candidates,out,ledgerRows){
+  const only=document.getElementById('onlyUnfulfilled').checked;
+  const rows=only ? ledgerRows.filter(row=>!row.fulfilled) : ledgerRows;
+  const pkRows=rows.filter(row=>row.source_type==='pk');
+  const birthRows=rows.filter(row=>row.source_type==='birth');
+  const specialRows=rows.filter(row=>row.source_type==='special');
+  const rewardSection = (label, body, note='') => `<div class="rewardSection"><div class="rewardSectionTitle"><b>${escapeHtml(label)}</b>${note?`<span class="small">${escapeHtml(note)}</span>`:''}</div>${body}</div>`;
+  out.className='lookupResult';
+  out.innerHTML=candidates+`
+    <div class="lookupSummary rewardLookupSummary">
+      <div class="lookupMini"><span class="small">名称</span><b>${escapeHtml(name)}</b></div>
+      <div class="lookupMini"><span class="small">总选奖励</span><b>${pkRows.length}</b></div>
+      <div class="lookupMini"><span class="small">生公奖励</span><b>${birthRows.length}</b></div>
+    </div>
+    ${rewardSection('总选奖励', renderLedgerRewardGroups(pkRows,'<div class="emptyState"><b>暂无总选奖励</b><div class="small">当前名称暂无符合条件的总选金额门槛奖励。</div></div>'), only?'仅显示未兑现':'按单场总选金额计算')}
+    ${rewardSection('生公奖励', renderLedgerRewardGroups(birthRows,'<div class="emptyState"><b>暂无生公奖励</b><div class="small">当前名称暂无符合条件的生公奖励。</div></div>'))}
+    ${rewardSection('特殊排名奖励', renderLedgerRewardGroups(specialRows,'<div class="emptyState"><b>暂无特殊排名奖励</b><div class="small">后台记录后会显示在这里。</div></div>'), `${specialRows.length} 项`)}
+    <div class="hint">总选奖励按单场总选金额判断；生公奖励按生公合计判断，其中生日留言册只显示最高达标档。特殊排名奖励由提供者独立提供，按后台记录显示。</div>`;
+}
 function renderRewardLookup(name,candidates,out){
+  const ledgerRows=rewardLookupLedgerRowsForUser(name);
+  if(ledgerRows.length || state.rewardLedgerAvailable){
+    renderLedgerRewardLookup(name,candidates,out,ledgerRows);
+    return;
+  }
+  renderLegacyRewardLookup(name,candidates,out);
+}
+
+function renderLegacyRewardLookup(name,candidates,out){
   const only=document.getElementById('onlyUnfulfilled').checked;
   const rows=pkEvents().map(e=>{
     const amount=DATA.records.filter(r=>r.user_name===name&&r.event_name===e.event_name).reduce((s,r)=>s+r.amount,0);
@@ -1451,7 +1870,7 @@ async function openAdmin(){
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   updateAuthUI();
-  if(user){ renderAdminOverview(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderSiteSettingsAdmin(); }
+  if(user){ renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderSiteSettingsAdmin(); }
 }
 function updateAuthUI(){
   if(IS_ADMIN_PAGE) document.body.classList.toggle('adminLoggedIn', !!state.user);
@@ -1475,7 +1894,7 @@ document.getElementById('loginBtn').onclick=async()=>{
   const password=document.getElementById('adminPassword').value;
   const res=await sb.auth.signInWithPassword({email,password});
   if(res.error){document.getElementById('loginStatus').textContent='登录失败：'+res.error.message;return;}
-  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderRewardTaskAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderSiteSettingsAdmin();
+  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderSiteSettingsAdmin();
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
@@ -1489,6 +1908,7 @@ function renderAdminGroup(groupId){
   if(groupId==='rewardCenter'){
     setRewardAdminPanel(state.rewardAdminPanel || 'tasks', {skipScroll:true});
     renderRewardTaskAdmin();
+    renderRewardLedgerAdmin();
     renderAdminRewards();
     renderRewardProgressAdmin();
     renderRewardChoiceAdmin();
@@ -1588,6 +2008,10 @@ document.querySelectorAll('.rewardPanelBtn').forEach(btn=>{
 
 const reloadRewards=document.getElementById('reloadRewards');
 if(reloadRewards) reloadRewards.onclick=()=>renderAdminRewards();
+const checkRewardLedgerBtn=document.getElementById('checkRewardLedgerBtn');
+if(checkRewardLedgerBtn) checkRewardLedgerBtn.onclick=renderRewardLedgerAdmin;
+const syncRewardLedgerBtn=document.getElementById('syncRewardLedgerBtn');
+if(syncRewardLedgerBtn) syncRewardLedgerBtn.onclick=syncRewardLedgerAdmin;
 ['rewardSearch','rewardFulfillmentFilter','rewardSourceFilter','rewardEventFilter','rewardNameFilter','rewardChoiceStateFilter'].forEach(id=>{
   const el=document.getElementById(id);
   if(!el) return;
@@ -1634,10 +2058,11 @@ async function renderAdminOverview(){
 }
 
 function rewardTaskMetrics(){
-  const normalUnfulfilled=[...allEarnedRewards(), ...allEarnedBirthRewards()].filter(r=>!r.fulfilled).length;
-  const specialUnfulfilled=(DATA.specialRankRewards || []).filter(r=>!r.fulfilled).length;
-  const pendingChoices=allChoiceRewardRows().filter(r=>r.choiceInfo?.status==='pending').length;
-  const needsProgress=allChoiceRewardRows().filter(r=>choiceProgressState(r)==='needs_progress').length;
+  const rows=allAdminRewardRows();
+  const normalUnfulfilled=rows.filter(r=>['pk','birth'].includes(r.source_type) && !r.fulfilled).length;
+  const specialUnfulfilled=rows.filter(r=>r.source_type==='special' && !r.fulfilled).length;
+  const pendingChoices=rows.filter(r=>rewardChoiceFilterState(r)==='pending').length;
+  const needsProgress=rows.filter(r=>rewardChoiceFilterState(r)==='needs_progress').length;
   const activeProgress=(DATA.rewardProgress || []).filter(r=>r.progress_status && !['已兑现','已完结'].includes(r.progress_status)).length;
   return {normalUnfulfilled,specialUnfulfilled,pendingChoices,needsProgress,activeProgress};
 }
@@ -1664,30 +2089,16 @@ function renderRewardTaskAdmin(){
 }
 
 function allAdminRewardRows(){
-  const normalRows=[
-    ...allEarnedRewards(),
-    ...allEarnedBirthRewards()
-  ].map(r=>({
-    ...r,
-    provider_type:r.provider_type || inferRewardProviderType(null,r.reward_name)
-  }));
-  const specialRows=(DATA.specialRankRewards || []).map(r=>({
-    source_type:'special',
-    id:r.id,
-    user_name:canon(r.winner_name),
-    event_name:r.event_name || '特殊排名奖励',
-    reward_name:r.reward_name,
-    amount:'',
-    fulfilled:!!r.fulfilled,
-    fulfilled_date:r.fulfilled_date || '',
-    provider_type:r.provider_type || 'support_club',
-    special_status:r.status || '',
-    note:r.note || ''
-  }));
-  return [...normalRows, ...specialRows];
+  return rewardLedgerRowsForAdmin();
 }
 
 function rewardChoiceFilterState(row){
+  if(row.choice_status){
+    if(row.choice_status==='not_required') return 'no_choice';
+    if(row.choice_status==='pending') return 'pending';
+    if(row.workflow_status==='needs_progress') return 'needs_progress';
+    return 'selected';
+  }
   const info=rewardChoiceInfo(row.user_name,row.source_type,row.event_name,row.reward_name);
   if(!info) return 'no_choice';
   if(!info.selected) return 'pending';
@@ -1700,10 +2111,14 @@ function adminRewardSearchText(row){
     row.user_name,
     row.event_name,
     row.reward_name,
+    row.display_reward_name || '',
+    row.selected_reward_name || '',
     sourceTypeText(row.source_type),
     providerTypeText(row.provider_type),
     choice?.selected || '',
     rewardChoiceFilterState(row),
+    row.progress_status || '',
+    row.workflow_status || '',
     row.special_status ? specialStatusText(row.special_status) : '',
     row.note || ''
   ].join(' ').toLowerCase();
@@ -1755,23 +2170,30 @@ function filterAdminRewardRows(rows){
 }
 
 function rewardChoiceSummaryText(row){
+  if(row.choice_status){
+    if(row.choice_status==='not_required') return '无需选择';
+    if(row.choice_status==='pending') return '待选择';
+    return `已选择：${row.selected_reward_name || row.display_reward_name || '-'}`;
+  }
   const info=rewardChoiceInfo(row.user_name,row.source_type,row.event_name,row.reward_name);
   if(!info) return '无需选择';
   return info.selected ? `已选择：${info.selected}` : '待选择';
 }
 
 function rewardRowsToCsv(rows){
-  const headers=['来源','用户','场次/分组','奖励','金额','兑现状态','兑现日期','选择状态','提供方','备注'];
+  const headers=['来源','用户','场次/分组','原奖励','具体奖励','金额','兑现状态','兑现日期','选择状态','制作进度','提供方','备注'];
   const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
   const body=rows.map(row=>[
     sourceTypeText(row.source_type),
     row.user_name,
     row.event_name,
     row.reward_name,
+    row.display_reward_name || row.reward_name,
     row.amount ? fmt(row.amount) : '',
     row.fulfilled ? '已兑现' : '未兑现',
     row.fulfilled_date || '',
     rewardChoiceSummaryText(row),
+    row.progress_status || '',
     providerTypeText(row.provider_type),
     row.note || ''
   ].map(esc).join(','));
@@ -1785,7 +2207,8 @@ function rewardRowsToText(rows){
     ...rows.map((row,index)=>{
       const amount=row.amount ? `｜金额 ${fmt(row.amount)}` : '';
       const choice=rewardChoiceSummaryText(row);
-      return `${index+1}. ${row.user_name}｜${sourceTypeText(row.source_type)}｜${row.event_name}｜${row.reward_name}${amount}｜${choice}`;
+      const display=row.display_reward_name && row.display_reward_name!==row.reward_name ? `｜具体奖励 ${row.display_reward_name}` : '';
+      return `${index+1}. ${row.user_name}｜${sourceTypeText(row.source_type)}｜${row.event_name}｜${row.reward_name}${display}${amount}｜${choice}`;
     })
   ].join('\n');
 }
@@ -1816,11 +2239,16 @@ function renderAdminRewards(){
     const amountText=r.amount ? ` ｜ 金额 ${fmt(r.amount)}` : '';
     const specialText=r.source_type==='special' && r.special_status ? ` ｜ ${specialStatusText(r.special_status)}` : '';
     const noteText=r.note ? ` ｜ 备注：${escapeHtml(r.note)}` : '';
+    const displayReward=r.display_reward_name || r.reward_name || '-';
+    const rewardText=displayReward!==r.reward_name
+      ? `${escapeHtml(r.reward_name || '-')} ｜ 具体奖励：${escapeHtml(displayReward)}`
+      : escapeHtml(r.reward_name || '-');
+    const progressText=r.progress_status ? ` ｜ 进度：${escapeHtml(r.progress_status)}` : '';
     return `
     <tr>
       <td><input class="reward-row-check" type="checkbox" data-i="${i}" aria-label="选择 ${escapeHtml(r.user_name)} ${escapeHtml(r.reward_name)}"></td>
       <td>${r.fulfilled?`<span class="pill good">已兑现${r.fulfilled_date?' '+escapeHtml(r.fulfilled_date):''}</span>`:`<span class="pill warn">未兑现</span>`}</td>
-      <td><b>${escapeHtml(r.user_name || '-')}</b><div class="small">${escapeHtml(sourceTypeText(r.source_type))} ｜ ${escapeHtml(r.event_name || '-')} ｜ ${escapeHtml(r.reward_name || '-')}${amountText} ｜ ${escapeHtml(providerTypeText(r.provider_type))}${specialText}${noteText}</div>${renderAdminChoiceSummary(r)}</td>
+      <td><b>${escapeHtml(r.user_name || '-')}</b><div class="small">${escapeHtml(sourceTypeText(r.source_type))} ｜ ${escapeHtml(r.event_name || '-')} ｜ ${rewardText}${amountText} ｜ ${escapeHtml(providerTypeText(r.provider_type))}${progressText}${specialText}${noteText}</div>${renderAdminChoiceSummary(r)}</td>
       <td><button class="btn ${r.fulfilled?'bad':'good'} reward-toggle" data-i="${i}">${r.fulfilled?'标为未兑现':'标为已兑现'}</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="4" class="small">当前筛选条件下暂无奖励数据</td></tr>';
@@ -1830,26 +2258,8 @@ function renderAdminRewards(){
 function quickFulfillRowsForName(name){
   const target=canon(name);
   if(!target) return [];
-  const normalRows=[
-    ...allEarnedRewards(),
-    ...allEarnedBirthRewards()
-  ].map(r=>({
-    ...r,
-    user_name:canon(r.user_name),
-    row_key:`${r.source_type}|${canon(r.user_name)}|${r.event_name}|${r.reward_group || ''}|${r.reward_name}`
-  }));
-  const specialRows=(DATA.specialRankRewards || []).map(r=>({
-    source_type:'special',
-    id:r.id,
-    user_name:canon(r.winner_name),
-    event_name:r.event_name || '特殊排名奖励',
-    reward_name:r.reward_name,
-    amount:0,
-    fulfilled:!!r.fulfilled,
-    fulfilled_date:r.fulfilled_date || '',
-    row_key:`special|${r.id}`
-  }));
-  const rows=[...normalRows, ...specialRows]
+  const rows=allAdminRewardRows()
+    .map(r=>({...r,user_name:canon(r.user_name),row_key:r.ledger_key || `${r.source_type}|${canon(r.user_name)}|${r.event_name}|${r.reward_group || ''}|${r.reward_name}`}))
     .filter(r=>canon(r.user_name)===target)
     .sort((a,b)=>Number(!!a.fulfilled)-Number(!!b.fulfilled) || `${sourceTypeText(a.source_type)}${a.event_name}${a.reward_name}`.localeCompare(`${sourceTypeText(b.source_type)}${b.event_name}${b.reward_name}`,'zh-Hans-CN'));
   return rows;
@@ -1874,10 +2284,10 @@ function renderQuickFulfillAdmin(){
   list.innerHTML=rows.map((r,i)=>`
     <div class="quickFulfillItem">
       <div>
-        <b>${escapeHtml(r.reward_name)} - ${escapeHtml(r.event_name || '-')}</b>
+        <b>${escapeHtml(r.display_reward_name || r.reward_name)} - ${escapeHtml(r.event_name || '-')}</b>
         <div class="small">
           <span class="pill ${r.fulfilled?'good':'warn'}">${r.fulfilled?`已兑现${r.fulfilled_date?' '+escapeHtml(r.fulfilled_date):''}`:'未兑现'}</span>
-          ${escapeHtml(sourceTypeText(r.source_type))}${r.amount ? ` ｜ 金额 ${fmt(r.amount)}` : ''}${renderAdminChoiceSummary(r)}
+          ${escapeHtml(sourceTypeText(r.source_type))}${r.amount ? ` ｜ 金额 ${fmt(r.amount)}` : ''}${r.progress_status ? ` ｜ 进度：${escapeHtml(r.progress_status)}` : ''}${renderAdminChoiceSummary(r)}
         </div>
       </div>
       <button class="btn ${r.fulfilled?'bad':'good'} quick-fulfill-done" data-i="${i}" type="button">${r.fulfilled?'标为未兑现':'标记已兑现'}</button>
@@ -1931,6 +2341,13 @@ async function toggleQuickFulfill(row, button=null){
 }
 
 function renderAdminChoiceSummary(row){
+  if(row.choice_status){
+    if(row.choice_status==='not_required') return '';
+    if(row.choice_status==='pending') return `<div class="small">奖励选择：<span class="pill warn">待选择</span></div>`;
+    const selected=row.selected_reward_name || row.display_reward_name || '';
+    const progress=row.progress_status || '';
+    return `<div class="small">奖励选择：<span class="pill good">${escapeHtml(selected || '-')}</span> ${progress?`<span class="pill good">${escapeHtml(progress)}</span>`:'<span class="pill warn">待编辑</span>'}</div>`;
+  }
   const info=rewardChoiceInfo(row.user_name,row.source_type,row.event_name,row.reward_name);
   if(!info) return '';
   if(!info.selected) return `<div class="small">奖励选择：<span class="pill warn">待选择</span></div>`;
@@ -1959,10 +2376,12 @@ async function saveFulfillmentRow(row,nextFulfilled,date,mode='admin'){
     }
     if(!res.error) await logOperation(mode==='quick'?'quick_toggle_birth_reward':'update_birth_reward_status', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, payload);
   }else if(row.source_type==='special'){
-    res=await sb.from('special_rank_rewards').update({fulfilled:nextFulfilled, fulfilled_date:date}).eq('id', row.id);
+    const specialId=row.id || row.source_id;
+    res=await sb.from('special_rank_rewards').update({fulfilled:nextFulfilled, fulfilled_date:date}).eq('id', specialId);
     if(!res.error && nextFulfilled) await syncRewardProgressCompleted(row.reward_name,'特殊排名奖励');
-    if(!res.error) await logOperation(mode==='quick'?'quick_toggle_special_reward':'update_special_reward_status', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, {id:row.id,fulfilled:nextFulfilled,fulfilled_date:date});
+    if(!res.error) await logOperation(mode==='quick'?'quick_toggle_special_reward':'update_special_reward_status', `${row.user_name}｜${row.reward_name}｜${row.event_name}`, {id:specialId,fulfilled:nextFulfilled,fulfilled_date:date});
   }
+  if(res && !res.error) await syncFulfillmentToRewardLedger(row,nextFulfilled,date);
   return res;
 }
 

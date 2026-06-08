@@ -404,6 +404,25 @@
 .adminTaskCard span{color:#2f3b52;font-size:13px;font-weight:900}
 .adminTaskCard b{color:var(--admin-accent-dark);font-size:28px;line-height:1}
 .adminTaskCard small{color:var(--admin-muted);line-height:1.4}
+.ledgerSyncBox{
+  border:1px solid #e5eaf3;
+  border-radius:18px;
+  background:#fff;
+  padding:14px;
+  box-shadow:0 8px 24px rgba(15,23,42,.035);
+}
+.rewardLedgerMetrics{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.ledgerMetricCard{
+  min-height:96px;
+  cursor:default;
+}
+.ledgerMetricCard:hover{
+  transform:none;
+  border-color:var(--admin-line);
+  box-shadow:none;
+}
 .adminLogItem{border:1px solid var(--admin-line);border-radius:15px;background:#fff;padding:11px 13px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
 .adminLogItem b{color:var(--admin-ink)}
 .adminLogItem .pill{justify-self:end}

@@ -178,6 +178,18 @@
         <div class="adminTaskGrid rewardTaskGrid" id="rewardTaskGrid">
           <div class="small">打开奖励中心后将自动生成待处理入口。</div>
         </div>
+        <div class="adminSubhead">奖励台账同步检测</div>
+        <div class="ledgerSyncBox">
+          <div class="small">第二阶段用于把现有奖励数据同步到新台账表。同步只新增或更新奖励台账，不会删除旧奖励数据。</div>
+          <div class="adminTaskGrid rewardLedgerMetrics" id="rewardLedgerMetrics">
+            <div class="small">读取数据后将显示台账差异。</div>
+          </div>
+          <div class="row adminControlRow adminFilterBar">
+            <button class="btn" id="checkRewardLedgerBtn" type="button">重新检测</button>
+            <button class="btn good" id="syncRewardLedgerBtn" type="button">同步到奖励台账</button>
+          </div>
+          <div class="status" id="rewardLedgerStatus"></div>
+        </div>
       </div>
 
       <div class="adminSection rewardModule rewardPanelSection" id="rewardAdmin" data-admin-group="rewardCenter" data-reward-panel="fulfillment">
