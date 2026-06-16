@@ -465,6 +465,15 @@
         </div>
         <button class="btn good" id="addAliasBtn">保存名称合并规则</button>
         <div class="status" id="aliasStatus"></div>
+        <div class="adminSubhead">疑似同一人待核对</div>
+        <div class="small">系统会根据大小写、空格、标点和轻微拼写差异列出候选。点击“填入合并”后仍需你确认保存。</div>
+        <div class="status" id="aliasSuggestionStatus"></div>
+        <div class="list adminTableWrap aliasSuggestionTable">
+          <table class="table">
+            <thead><tr><th>疑似写法</th><th>建议统一为</th><th>判断依据</th><th>操作</th></tr></thead>
+            <tbody id="aliasSuggestionBody"></tbody>
+          </table>
+        </div>
         <div class="adminSubhead">当前生效规则</div>
         <div class="list adminTableWrap aliasRulesTable">
           <table class="table">

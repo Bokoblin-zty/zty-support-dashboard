@@ -23,7 +23,7 @@ const VISIT_VIEW_LABELS = {
   questions:'匿名提问'
 };
 
-let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[], rewardLedger:[] };
+let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rawNameEntries:[], rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[], rewardLedger:[] };
 let state = { view:'overview', event:'', user:null, questionFilter:'pending', dataAdminPanel:'import', rewardAdminPanel:'tasks', rewardProgressAvailable:true, rewardChoicesAvailable:true, rewardLedgerAvailable:true, visitLogsAvailable:true };
 let siteSettings = { access_password_hash: DEFAULT_SITE_ACCESS_PASSWORD_HASH, access_ttl_days: DEFAULT_SITE_ACCESS_TTL_DAYS, available:false };
 const IS_ADMIN_PAGE = document.body.classList.contains('adminPage');
@@ -149,16 +149,25 @@ async function loadAll(){
   const rawBirthRewardStatus = birthRewardStatus.data || [];
   const rawSpecialRankRewards = specialRankRewards.data || [];
   const rawRewardChoices = rewardChoices.error ? [] : (rewardChoices.data || []);
-  DATA.autoNames = buildAutoNameMap([
-    ...rawRecords.map(r=>r.user_name),
-    ...rawBirthRecords.map(r=>r.user_name),
-    ...rawRewardStatus.map(r=>r.user_name),
-    ...rawBirthRewardStatus.map(r=>r.user_name),
-    ...rawSpecialRankRewards.map(r=>r.winner_name),
-    ...rawRewardChoices.map(r=>r.user_name),
-    ...DATA.aliases.map(a=>a.alias_name),
-    ...DATA.aliases.map(a=>a.canonical_name)
-  ]);
+  const rawNameEntries=[];
+  const addRawNameEntry=(name,source,amount=0)=>{
+    const raw=String(name ?? '').trim();
+    const cleaned=cleanName(raw);
+    const key=nameKey(cleaned);
+    if(key) rawNameEntries.push({raw,cleaned,key,source,amount:num(amount)});
+  };
+  rawRecords.forEach(r=>addRawNameEntry(r.user_name,'总选',r.amount));
+  rawBirthRecords.forEach(r=>addRawNameEntry(r.user_name,'生公',r.amount));
+  rawRewardStatus.forEach(r=>addRawNameEntry(r.user_name,'总选奖励'));
+  rawBirthRewardStatus.forEach(r=>addRawNameEntry(r.user_name,'生公奖励'));
+  rawSpecialRankRewards.forEach(r=>addRawNameEntry(r.winner_name,'特殊奖励'));
+  rawRewardChoices.forEach(r=>addRawNameEntry(r.user_name,'奖励选择'));
+  DATA.aliases.forEach(a=>{
+    addRawNameEntry(a.alias_name,'合并规则');
+    addRawNameEntry(a.canonical_name,'合并规则');
+  });
+  DATA.rawNameEntries = rawNameEntries;
+  DATA.autoNames = buildAutoNameMap(rawNameEntries.map(entry=>entry.raw));
   DATA.events = events.data || [];
   DATA.records = rawRecords.map(r=>({...r,user_name:canon(r.user_name),amount:num(r.amount)}));
   DATA.birthRecords = rawBirthRecords.map(r=>({...r,user_name:canon(r.user_name),amount:num(r.amount)}));
@@ -2657,15 +2666,147 @@ async function saveRewardChoice(row, selected=''){
   await loadAll();
 }
 
+function aliasPairKey(a,b){
+  return [nameKey(a),nameKey(b)].sort().join('||');
+}
+function aliasExistingPairKeys(){
+  const set=new Set();
+  (DATA.aliases || []).forEach(row=>{
+    const alias=cleanName(row.alias_name);
+    const canonical=cleanName(row.canonical_name);
+    if(alias && canonical) set.add(aliasPairKey(alias,canonical));
+  });
+  return set;
+}
+function aliasNameStats(){
+  const map=new Map();
+  (DATA.rawNameEntries || []).forEach(entry=>{
+    const raw=String(entry.raw || '').trim();
+    const cleaned=cleanName(raw);
+    const key=nameKey(cleaned);
+    if(!key) return;
+    const current=map.get(raw) || {name:raw,cleaned,key,count:0,amount:0,sources:new Set()};
+    current.count += 1;
+    current.amount += num(entry.amount);
+    if(entry.source) current.sources.add(entry.source);
+    map.set(raw,current);
+  });
+  return [...map.values()].map(row=>({...row,sources:[...row.sources]}));
+}
+function boundedEditDistance(a,b,limit=1){
+  if(Math.abs(a.length-b.length)>limit) return limit+1;
+  const prev=Array.from({length:b.length+1},(_,i)=>i);
+  for(let i=1;i<=a.length;i++){
+    const curr=[i];
+    let rowMin=curr[0];
+    for(let j=1;j<=b.length;j++){
+      const cost=a[i-1]===b[j-1] ? 0 : 1;
+      curr[j]=Math.min(prev[j]+1,curr[j-1]+1,prev[j-1]+cost);
+      rowMin=Math.min(rowMin,curr[j]);
+    }
+    if(rowMin>limit) return limit+1;
+    prev.splice(0,prev.length,...curr);
+  }
+  return prev[b.length];
+}
+function aliasSuggestionRows(){
+  const stats=aliasNameStats();
+  const existing=aliasExistingPairKeys();
+  const suggestions=[];
+  const seen=new Set();
+  const addSuggestion=(alias,canonical,reason,priority)=>{
+    const pair=aliasPairKey(alias,canonical);
+    if(!alias || !canonical || (nameKey(alias)===nameKey(canonical) && cleanName(alias)===cleanName(canonical))) return;
+    if(existing.has(pair) || seen.has(pair)) return;
+    seen.add(pair);
+    const aliasStats=stats.find(row=>row.name===alias);
+    const canonicalStats=stats.find(row=>row.name===canonical);
+    suggestions.push({
+      alias,
+      canonical,
+      reason,
+      priority,
+      count:(aliasStats?.count || 0) + (canonicalStats?.count || 0),
+      amount:(aliasStats?.amount || 0) + (canonicalStats?.amount || 0),
+      sources:[...(aliasStats?.sources || []), ...(canonicalStats?.sources || [])].filter((v,i,a)=>a.indexOf(v)===i)
+    });
+  };
+  const byKey=new Map();
+  stats.forEach(row=>{
+    if(!byKey.has(row.key)) byKey.set(row.key,[]);
+    byKey.get(row.key).push(row);
+  });
+  byKey.forEach(group=>{
+    const unique=group.filter((row,index,arr)=>arr.findIndex(x=>x.name===row.name)===index);
+    if(unique.length<2) return;
+    const canonical=unique.reduce((best,row)=>pickDisplayName(best,row.cleaned),unique[0].cleaned);
+    unique.forEach(row=>{
+      if(cleanName(row.name)!==canonical) addSuggestion(row.name,canonical,'去空格/标点/大小写后相同',1);
+    });
+  });
+  const keyGroups=[...byKey.values()].map(group=>{
+    const representative=group.reduce((best,row)=>pickDisplayName(best,row.cleaned),group[0].cleaned);
+    return {key:group[0].key,representative};
+  }).filter(row=>row.key.length>=4);
+  for(let i=0;i<keyGroups.length;i++){
+    for(let j=i+1;j<keyGroups.length;j++){
+      const a=keyGroups[i];
+      const b=keyGroups[j];
+      const minLen=Math.min(a.key.length,b.key.length);
+      const maxLen=Math.max(a.key.length,b.key.length);
+      let reason='';
+      let priority=3;
+      if(boundedEditDistance(a.key,b.key,1)<=1){
+        reason='名称仅差 1 个字符';
+        priority=2;
+      }else if(minLen>=4 && maxLen-minLen<=2 && (a.key.includes(b.key) || b.key.includes(a.key))){
+        reason='疑似多/少字符';
+        priority=3;
+      }
+      if(!reason) continue;
+      const canonical=pickDisplayName(a.representative,b.representative);
+      const alias=canonical===a.representative ? b.representative : a.representative;
+      addSuggestion(alias,canonical,reason,priority);
+    }
+  }
+  return suggestions
+    .sort((a,b)=>a.priority-b.priority || b.amount-a.amount || b.count-a.count || String(a.alias).localeCompare(String(b.alias),'zh-Hans-CN'))
+    .slice(0,80);
+}
+
 async function renderAliasAdmin(){
   const rulesBody=document.getElementById('aliasRulesBody');
   const historyBody=document.getElementById('aliasHistoryBody');
+  const suggestionBody=document.getElementById('aliasSuggestionBody');
+  const suggestionStatus=document.getElementById('aliasSuggestionStatus');
   const historyStatus=document.getElementById('aliasHistoryStatus');
-  if(!rulesBody && !historyBody) return;
+  if(!rulesBody && !historyBody && !suggestionBody) return;
   const aliases=[...(DATA.aliases || [])].sort((a,b)=>
     String(a.canonical_name || '').localeCompare(String(b.canonical_name || ''),'zh-Hans-CN') ||
     String(a.alias_name || '').localeCompare(String(b.alias_name || ''),'zh-Hans-CN')
   );
+  if(suggestionBody){
+    const suggestions=aliasSuggestionRows();
+    if(suggestionStatus) suggestionStatus.textContent=suggestions.length ? `发现 ${suggestions.length} 条疑似同一人候选，请核对后再保存。` : '暂未发现需要核对的疑似同一人。';
+    suggestionBody.innerHTML=suggestions.map(row=>`
+      <tr>
+        <td><b>${escapeHtml(row.alias)}</b></td>
+        <td><span class="pill good">${escapeHtml(row.canonical)}</span></td>
+        <td><div>${escapeHtml(row.reason)}</div><div class="small">${escapeHtml(row.sources.join(' / ') || '来源未知')} ｜ 出现 ${row.count} 次${row.amount?` ｜ 金额合计 ${fmt(row.amount)}`:''}</div></td>
+        <td><button class="btn alias-suggestion-btn" data-alias="${escapeHtml(row.alias)}" data-canonical="${escapeHtml(row.canonical)}" type="button">填入合并</button></td>
+      </tr>
+    `).join('') || '<tr><td colspan="4" class="small">暂无疑似同一人候选</td></tr>';
+    suggestionBody.querySelectorAll('.alias-suggestion-btn').forEach(btn=>{
+      btn.onclick=()=>{
+        const aliasInput=document.getElementById('aliasName');
+        const canonicalInput=document.getElementById('canonicalName');
+        if(aliasInput) aliasInput.value=btn.dataset.alias || '';
+        if(canonicalInput) canonicalInput.value=btn.dataset.canonical || '';
+        const status=document.getElementById('aliasStatus');
+        if(status) status.textContent='已填入疑似候选，请核对无误后保存';
+      };
+    });
+  }
   if(rulesBody){
     rulesBody.innerHTML=aliases.map(row=>`
       <tr>

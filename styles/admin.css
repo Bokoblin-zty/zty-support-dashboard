@@ -504,12 +504,14 @@
 .aliasExample{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 10px}
 .aliasArrow{color:var(--admin-accent-dark);font-weight:900}
 .aliasRulesTable,
-.aliasHistoryTable{
+.aliasHistoryTable,
+.aliasSuggestionTable{
   max-height:360px;
   overflow:auto;
 }
 .aliasRulesTable .table th,
-.aliasHistoryTable .table th{
+.aliasHistoryTable .table th,
+.aliasSuggestionTable .table th{
   position:sticky;
   top:0;
   z-index:1;
