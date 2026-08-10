@@ -330,6 +330,52 @@
   .overviewRankGrid .overviewRankCard:nth-child(n+2) .rankBreakdown{
     display:none !important;
   }
+  .electionPanel{
+    gap:10px;
+  }
+  .electionKpiGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .electionToolbar{
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+  .electionModeGroup{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:7px;
+  }
+  .electionLookupBox{
+    width:100%;
+  }
+  .electionRankTitle{
+    align-items:flex-start;
+    padding:10px;
+  }
+  .electionRankHeader{
+    display:none;
+  }
+  .electionRankItem{
+    grid-template-columns:42px minmax(0,1fr) 72px;
+    gap:8px;
+    min-height:54px;
+    padding:8px 10px;
+  }
+  .electionRankName span{
+    font-size:10px;
+    line-height:1.35;
+  }
+  .electionRankValue b{
+    font-size:14px;
+  }
+  .electionRankValue span{
+    font-size:10px;
+  }
+  .electionRewardBtn{
+    min-height:24px;
+    padding:4px 8px;
+    font-size:10px;
+  }
 
   .lookupCard{
     padding:13px;

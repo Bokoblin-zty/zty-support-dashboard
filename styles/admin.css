@@ -317,7 +317,7 @@
   box-shadow:0 8px 24px rgba(15,23,42,.035);
 }
 .adminPage .dataPanelNav{
-  grid-template-columns:repeat(3,minmax(0,1fr));
+  grid-template-columns:repeat(4,minmax(0,1fr));
 }
 .adminPage .rewardPanelNav{
   grid-template-columns:repeat(5,minmax(0,1fr));
@@ -362,6 +362,42 @@
 .adminPage .adminSection[data-admin-group="rewardCenter"][data-reward-panel].active.rewardPanelActive{
   display:block;
 }
+.adminPage .electionRewardSection{
+  border:1px solid #dbe4f2;
+  background:#fff;
+  box-shadow:0 12px 36px rgba(48,73,130,.08);
+}
+.adminPage .electionRewardSection h3{
+  font-size:24px;
+}
+.adminPage .electionRewardMetrics{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+.adminPage .electionRewardAdminGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+  align-items:start;
+}
+.adminPage .electionRewardRuleForm{
+  display:grid;
+  grid-template-columns:minmax(150px,.7fr) minmax(190px,1fr) 110px;
+  gap:10px;
+  align-items:end;
+}
+.adminPage .electionRewardWideField{
+  grid-column:1 / -1;
+}
+.adminPage .electionRewardActions{
+  margin:12px 0;
+  justify-content:flex-start;
+}
+.adminPage .electionRewardTable{
+  max-height:320px;
+}
+.adminPage .electionRewardLedgerCard{
+  margin-top:16px;
+}
 .adminPage .dataPanelSection{
   min-width:0;
 }
@@ -393,6 +429,33 @@
   grid-template-columns:160px minmax(180px,.8fr) minmax(260px,1fr) auto;
   gap:12px;
   align-items:end;
+}
+.adminPage .electionImportPrimary{
+  grid-template-columns:160px minmax(180px,.8fr) minmax(260px,1fr) auto;
+}
+.adminPage .electionAdminMetrics{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+.adminPage .electionSingleCard{
+  margin:14px 0;
+}
+.adminPage .electionSingleForm{
+  display:grid;
+  grid-template-columns:150px minmax(180px,.9fr) 130px minmax(170px,.8fr) minmax(220px,1fr);
+  gap:10px;
+  align-items:end;
+}
+.adminPage .electionSingleActions{
+  margin-top:12px;
+  justify-content:flex-start;
+}
+.adminPage .electionRecordActions{
+  justify-content:flex-start;
+  flex-wrap:nowrap;
+}
+.adminPage .electionRecordActions .btn{
+  min-height:32px;
+  padding:7px 10px;
 }
 .adminPage .adminField{
   display:grid;

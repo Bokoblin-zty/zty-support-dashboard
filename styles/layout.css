@@ -9,7 +9,7 @@ header{padding:22px 18px 16px;background:linear-gradient(135deg,#fff,#fff9e8 58%
 .navRow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .eventFilter{display:flex;align-items:center;gap:8px;justify-content:flex-end;padding-top:2px}
 .mainNav{
-  grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+  grid-template-columns:repeat(7,minmax(0,1fr)) !important;
 }
 .pkNav{
   grid-template-columns:repeat(4,minmax(0,1fr)) !important;
@@ -190,7 +190,7 @@ header{padding:22px 18px 16px;background:linear-gradient(135deg,#fff,#fff9e8 58%
   gap:12px;
 }
 .mainNav{
-  grid-template-columns:repeat(6,minmax(0,1fr)) !important;
+  grid-template-columns:repeat(7,minmax(0,1fr)) !important;
 }
 .mainNav .btn{
   min-height:48px;

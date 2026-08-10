@@ -46,6 +46,7 @@
       <div class="navRow mainNav">
         <button class="btn active" data-main-view="overview">数据总览</button>
         <button class="btn" data-main-view="pk">🍊排名</button>
+        <button class="btn" data-view="election2026">2026总选</button>
         <button class="btn" data-view="rewards">奖励查询</button>
         <button class="btn noticeBtn" data-view="announcements">公告通知<span id="announcementBadge" class="noticeDot hidden"></span></button>
         <button class="btn" data-view="lottery">抽奖结果</button>
@@ -136,6 +137,7 @@
         <button class="tab active" data-admin-tab="adminOverview">工作台</button>
         <button class="tab" data-admin-tab="dataAdmin">数据管理</button>
         <button class="tab" data-admin-tab="rewardCenter">奖励中心</button>
+        <button class="tab" data-admin-tab="electionRewardCenter">总选奖励</button>
         <button class="tab" data-admin-tab="contentCenter">内容互动</button>
         <button class="tab" data-admin-tab="systemCenter">系统记录</button>
         <a class="tab adminBackLink" href="index.html">返回前台</a>
@@ -301,12 +303,104 @@
         <div class="list adminTableWrap"><table class="table choiceTable"><thead><tr><th>状态</th><th>用户 / 奖励</th><th>选择</th></tr></thead><tbody id="rewardChoiceBody"></tbody></table></div>
       </div>
 
+      <div class="adminSection electionRewardSection" id="electionRewardCenter" data-admin-group="electionRewardCenter">
+        <h3>2026总选奖励</h3>
+        <div class="adminLead">这是独立的 2026 总选奖励入口，不和旧 PK 奖励混用。达标奖励按总贡献值自动计算，单独奖励直接绑定某个 ID。</div>
+        <div class="adminOverviewGrid electionRewardMetrics" id="electionRewardMetrics">
+          <div class="small">打开本页后将自动汇总当前总选奖励。</div>
+        </div>
+        <div class="electionRewardAdminGrid">
+          <div class="dataWorkbenchCard">
+            <div class="adminSubhead">达标奖励规则</div>
+            <input id="electionRewardRuleId" type="hidden">
+            <div class="electionRewardRuleForm">
+              <label class="adminField">
+                <span>总贡献值门槛</span>
+                <input id="electionRewardRuleThreshold" type="number" step="0.1" placeholder="例如 50">
+              </label>
+              <label class="adminField">
+                <span>奖励名称</span>
+                <input id="electionRewardRuleName" placeholder="例如 总选纪念卡">
+              </label>
+              <label class="adminField">
+                <span>排序</span>
+                <input id="electionRewardRuleSort" type="number" placeholder="可空">
+              </label>
+              <label class="adminField electionRewardWideField">
+                <span>备注</span>
+                <input id="electionRewardRuleNote" placeholder="可空">
+              </label>
+            </div>
+            <div class="adminRowActions electionRewardActions">
+              <button class="btn good" id="saveElectionRewardRuleBtn" type="button">保存规则</button>
+              <button class="btn hidden" id="cancelElectionRewardRuleEditBtn" type="button">取消编辑</button>
+            </div>
+            <div class="list adminTableWrap electionRewardTable">
+              <table class="table"><thead><tr><th>门槛</th><th>奖励</th><th>备注</th><th>操作</th></tr></thead><tbody id="electionRewardRuleBody"></tbody></table>
+            </div>
+          </div>
+          <div class="dataWorkbenchCard">
+            <div class="adminSubhead">单独奖励</div>
+            <input id="electionManualRewardId" type="hidden">
+            <div class="electionRewardRuleForm">
+              <label class="adminField">
+                <span>名称 / ID</span>
+                <input id="electionManualRewardUser" list="nameOptions" placeholder="输入 ID">
+              </label>
+              <label class="adminField">
+                <span>奖励名称</span>
+                <input id="electionManualRewardName" placeholder="例如 特别感谢礼">
+              </label>
+              <label class="adminField">
+                <span>状态</span>
+                <select id="electionManualRewardFulfilled">
+                  <option value="false">待兑现</option>
+                  <option value="true">已兑现</option>
+                </select>
+              </label>
+              <label class="adminField">
+                <span>兑现日期</span>
+                <input id="electionManualRewardDate" placeholder="可空">
+              </label>
+              <label class="adminField electionRewardWideField">
+                <span>具体信息</span>
+                <input id="electionManualRewardNote" placeholder="可空，例如 来源、原因、说明">
+              </label>
+            </div>
+            <div class="adminRowActions electionRewardActions">
+              <button class="btn good" id="saveElectionManualRewardBtn" type="button">保存单独奖励</button>
+              <button class="btn hidden" id="cancelElectionManualRewardEditBtn" type="button">取消编辑</button>
+            </div>
+            <div class="list adminTableWrap electionRewardTable">
+              <table class="table"><thead><tr><th>用户</th><th>奖励</th><th>状态</th><th>操作</th></tr></thead><tbody id="electionManualRewardBody"></tbody></table>
+            </div>
+          </div>
+        </div>
+        <div class="dataWorkbenchCard electionRewardLedgerCard">
+          <div class="adminSubhead">总选奖励兑现台账</div>
+          <div class="formGrid adminFilterBar">
+            <input id="electionRewardSearch" type="search" placeholder="搜索 ID / 奖励 / 备注">
+            <select id="electionRewardFilter">
+              <option value="pending">仅待兑现</option>
+              <option value="all">全部状态</option>
+              <option value="fulfilled">仅已兑现</option>
+            </select>
+            <button class="btn" id="reloadElectionRewardsBtn" type="button">刷新</button>
+          </div>
+          <div class="status" id="electionRewardStatus"></div>
+          <div class="list adminTableWrap">
+            <table class="table"><thead><tr><th>状态</th><th>用户 / 奖励</th><th>来源</th><th>操作</th></tr></thead><tbody id="electionRewardLedgerBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+
       <div class="adminSection dataHubSection" id="dataHubAdmin" data-admin-group="dataAdmin">
         <h3>数据管理</h3>
         <div class="adminLead">这里集中处理总选 PK、生公数据和名称合并。优先使用“数据导入”，导出和名称清洗放在独立页面里，避免操作时互相干扰。</div>
         <div class="dataPanelNav" role="tablist" aria-label="数据管理分类">
           <button class="btn dataPanelBtn active" data-data-panel="import" type="button">数据导入</button>
           <button class="btn dataPanelBtn" data-data-panel="events" type="button">场次与导出</button>
+          <button class="btn dataPanelBtn" data-data-panel="election2026" type="button">2026总选</button>
           <button class="btn dataPanelBtn" data-data-panel="aliases" type="button">名称合并</button>
         </div>
       </div>
@@ -393,6 +487,100 @@
           <button class="btn good" id="importUnifiedCsvBtn" type="button">导入 CSV 数据</button>
         </details>
         <div class="status" id="unifiedImportStatus"></div>
+      </div>
+
+      <div class="adminSection dataPanelSection dataImportSection" id="election2026Admin" data-admin-group="dataAdmin" data-data-panel="election2026">
+        <h3>2026总选数据</h3>
+        <div class="adminLead">导入明票榜、未翻明暗票、已翻明暗票和暗账链接金额。PK 数据会直接沿用已导入的总选单场数据，并按 33 元折算 1 票。</div>
+        <div class="adminOverviewGrid electionAdminMetrics" id="election2026AdminMetrics">
+          <div class="small">打开本页后将自动汇总当前 2026 总选数据。</div>
+        </div>
+        <div class="dataWorkbenchCard electionSingleCard">
+          <div class="adminSubhead">单条新增 / 编辑</div>
+          <div class="electionSingleForm">
+            <input id="election2026EditId" type="hidden">
+            <label class="adminField">
+              <span>数据来源</span>
+              <select id="election2026SingleSource">
+                <option value="public_vote">明票榜</option>
+                <option value="dark_unrevealed">未翻明暗票</option>
+                <option value="dark_revealed">已翻明暗票</option>
+                <option value="dark_link_amount">暗账链接金额</option>
+              </select>
+            </label>
+            <label class="adminField">
+              <span>名称 / ID</span>
+              <input id="election2026SingleName" list="nameOptions" placeholder="输入名称或 ID">
+            </label>
+            <label class="adminField">
+              <span>数值</span>
+              <input id="election2026SingleValue" type="number" step="0.1" placeholder="票数">
+            </label>
+            <label class="adminField">
+              <span>批次备注</span>
+              <input id="election2026SingleBatch" placeholder="可空">
+            </label>
+            <label class="adminField">
+              <span>说明</span>
+              <input id="election2026SingleNote" placeholder="可空">
+            </label>
+          </div>
+          <div class="adminRowActions electionSingleActions">
+            <button class="btn good" id="saveElection2026SingleBtn" type="button">保存条目</button>
+            <button class="btn hidden" id="cancelElection2026EditBtn" type="button">取消编辑</button>
+          </div>
+        </div>
+        <div class="dataImportPrimary electionImportPrimary">
+          <label class="adminField">
+            <span>数据来源</span>
+            <select id="election2026Source">
+              <option value="public_vote">明票榜</option>
+              <option value="dark_unrevealed">未翻明暗票</option>
+              <option value="dark_revealed">已翻明暗票</option>
+              <option value="dark_link_amount">暗账链接金额</option>
+            </select>
+          </label>
+          <label class="adminField">
+            <span>批次备注</span>
+            <input id="election2026Batch" placeholder="可空，例如 8月明票榜">
+          </label>
+          <label class="adminField">
+            <span>Excel / CSV 文件</span>
+            <input id="election2026File" type="file" accept=".xlsx,.xls,.csv">
+          </label>
+          <button class="btn" id="previewElection2026Btn" type="button">识别文件</button>
+        </div>
+        <div id="election2026Preview" class="excelPreview hidden"></div>
+        <div class="manualImportBox">
+          <div class="adminSubhead">手动新增识别行</div>
+          <div class="dataManualGrid">
+            <input id="manualElection2026Name" list="nameOptions" placeholder="名称 / ID">
+            <input id="manualElection2026Value" type="number" step="0.1" placeholder="票数或金额">
+            <button class="btn" id="addManualElection2026Btn" type="button">加入预览表</button>
+          </div>
+        </div>
+        <div class="adminRowActions dataImportActions">
+          <button class="btn hidden" id="applyElection2026EditBtn" type="button">应用手动调整</button>
+          <button class="btn good hidden" id="confirmElection2026Btn" type="button">确认导入当前来源</button>
+          <button class="btn bad" id="clearElection2026SourceBtn" type="button">清空当前来源</button>
+          <button class="btn" id="exportElection2026Btn" type="button">导出2026总选CSV</button>
+        </div>
+        <details class="advancedBox dataAdvanced">
+          <summary>CSV 备用导入</summary>
+          <textarea id="election2026Csv" placeholder="名称,票数&#10;波克布林,36"></textarea>
+          <button class="btn good" id="importElection2026CsvBtn" type="button">导入 CSV 到当前来源</button>
+        </details>
+        <div class="status" id="election2026Status"></div>
+        <div class="dataWorkbenchCard dataEventListCard">
+          <div class="adminSubhead">已导入票类数据</div>
+          <div class="small">按数据来源展示当前已导入记录；PK 折算不在这里保存，前台会直接使用总选单场金额实时计算。</div>
+          <div class="list adminTableWrap">
+            <table class="table">
+              <thead><tr><th>来源</th><th>名称</th><th>数值</th><th>批次</th><th>说明</th><th>时间</th><th>操作</th></tr></thead>
+              <tbody id="election2026AdminBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <div class="adminSection rewardModule rewardPanelSection" id="ruleImportAdmin" data-admin-group="rewardCenter" data-reward-panel="rules">

@@ -14,17 +14,27 @@ const VISIT_VIEW_LABELS = {
   participant:'总选排名',
   event:'总选单场',
   birth:'生公排名',
+  election2026:'2026总选',
   lookup:'奖励查询',
   announcements:'公告通知',
   lottery:'抽奖结果',
   questions:'匿名提问'
 };
 
-let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rawNameEntries:[], rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[], rewardLedger:[] };
-let state = { view:'overview', event:'', user:null, questionFilter:'pending', dataAdminPanel:'import', rewardAdminPanel:'ledger', rewardProgressAvailable:true, rewardChoicesAvailable:true, rewardLedgerAvailable:true, visitLogsAvailable:true, lastSavedRewardProgress:'' };
+const ELECTION_2026_SOURCE_LABELS = {
+  public_vote:'明票榜',
+  dark_unrevealed:'未翻明暗票',
+  dark_revealed:'已翻明暗票',
+  dark_link_amount:'暗账链接金额'
+};
+const ELECTION_2026_SOURCE_ORDER = ['public_vote','dark_unrevealed','dark_revealed','dark_link_amount'];
+
+let DATA = { events:[], records:[], birthRecords:[], election2026Records:[], election2026RewardRules:[], election2026ManualRewards:[], election2026RewardStatus:[], rewardStatus:[], aliases:[], autoNames:new Map(), rawNameEntries:[], rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[], rewardLedger:[] };
+let state = { view:'overview', event:'', user:null, questionFilter:'pending', dataAdminPanel:'import', rewardAdminPanel:'ledger', election2026Mode:'contribution', election2026Available:true, election2026RewardsAvailable:true, rewardProgressAvailable:true, rewardChoicesAvailable:true, rewardLedgerAvailable:true, visitLogsAvailable:true, lastSavedRewardProgress:'' };
 const IS_ADMIN_PAGE = document.body.classList.contains('adminPage');
 let pendingPkExcelRows = [];
 let pendingBirthExcelRows = [];
+let pendingElection2026Rows = [];
 let currentRewardAdminRows = [];
 let currentRewardProgressRows = [];
 const REWARD_PROVIDER_TYPES = {
@@ -45,7 +55,7 @@ const num = v => {
   return Number.isFinite(n) ? n : 0;
 };
 const fmt = n => num(n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtVotes = n => num(n).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtVotes = n => num(n).toLocaleString('zh-CN',{minimumFractionDigits:1,maximumFractionDigits:1});
 const byAmountDesc = (a,b) => num(b.value ?? b.total ?? b.amount) - num(a.value ?? a.total ?? a.amount);
 const byNameAsc = (a,b) => String(a.name ?? a.user_name ?? '').localeCompare(String(b.name ?? b.user_name ?? ''),'zh-Hans-CN');
 
@@ -112,7 +122,7 @@ const escapeHtml = s => String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'
 ========================= */
 async function loadAll(){
   // 一次性读取页面所需数据，并在进入渲染前完成名称统一和数字格式整理。
-  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards, announcements, lotteryRecords, rewardProgress, rewardChoiceOptions, rewardChoices, rewardLedger] = await Promise.all([
+  const [events, records, birth, status, aliases, rewardRules, birthRewardRules, birthRewardStatus, specialRankRewards, announcements, lotteryRecords, rewardProgress, rewardChoiceOptions, rewardChoices, rewardLedger, election2026Records, election2026RewardRules, election2026ManualRewards, election2026RewardStatus] = await Promise.all([
     sb.from('pk_events').select('*').order('sort_order',{ascending:true}),
     sb.from('pk_records').select('*'),
     sb.from('birth_fund_records').select('*'),
@@ -127,7 +137,11 @@ async function loadAll(){
     sb.from('reward_progress').select('*').order('reward_name',{ascending:true}),
     sb.from('reward_choice_options').select('*').order('reward_name',{ascending:true}),
     sb.from('reward_choices').select('*'),
-    sb.from('reward_ledger').select('*')
+    sb.from('reward_ledger').select('*'),
+    sb.from('election_2026_vote_records').select('*').order('source_type',{ascending:true}),
+    sb.from('election_2026_reward_rules').select('*').order('sort_order',{ascending:true}).order('threshold_votes',{ascending:true}),
+    sb.from('election_2026_manual_rewards').select('*').order('created_at',{ascending:false}),
+    sb.from('election_2026_reward_status').select('*')
   ]);
   for(const res of [events,records,birth,status,aliases,rewardRules,birthRewardRules,birthRewardStatus,specialRankRewards,announcements,lotteryRecords]){
     if(res.error){ alert('读取数据失败：'+res.error.message); console.error(res.error); }
@@ -139,9 +153,19 @@ async function loadAll(){
   if(rewardChoices.error) console.warn('reward_choices unavailable:', rewardChoices.error);
   state.rewardLedgerAvailable = !rewardLedger.error;
   if(rewardLedger.error) console.warn('reward_ledger unavailable:', rewardLedger.error);
+  state.election2026Available = !election2026Records.error;
+  if(election2026Records.error) console.warn('election_2026_vote_records unavailable:', election2026Records.error);
+  state.election2026RewardsAvailable = !election2026RewardRules.error && !election2026ManualRewards.error && !election2026RewardStatus.error;
+  if(election2026RewardRules.error) console.warn('election_2026_reward_rules unavailable:', election2026RewardRules.error);
+  if(election2026ManualRewards.error) console.warn('election_2026_manual_rewards unavailable:', election2026ManualRewards.error);
+  if(election2026RewardStatus.error) console.warn('election_2026_reward_status unavailable:', election2026RewardStatus.error);
   DATA.aliases = aliases.data || [];
   const rawRecords = records.data || [];
   const rawBirthRecords = birth.data || [];
+  const rawElection2026Records = election2026Records.error ? [] : (election2026Records.data || []);
+  const rawElection2026RewardRules = election2026RewardRules.error ? [] : (election2026RewardRules.data || []);
+  const rawElection2026ManualRewards = election2026ManualRewards.error ? [] : (election2026ManualRewards.data || []);
+  const rawElection2026RewardStatus = election2026RewardStatus.error ? [] : (election2026RewardStatus.data || []);
   const rawRewardStatus = status.data || [];
   const rawBirthRewardStatus = birthRewardStatus.data || [];
   const rawSpecialRankRewards = specialRankRewards.data || [];
@@ -155,6 +179,8 @@ async function loadAll(){
   };
   rawRecords.forEach(r=>addRawNameEntry(r.user_name,'总选',r.amount));
   rawBirthRecords.forEach(r=>addRawNameEntry(r.user_name,'生公',r.amount));
+  rawElection2026Records.forEach(r=>addRawNameEntry(r.user_name,'2026总选',r.value));
+  rawElection2026ManualRewards.forEach(r=>addRawNameEntry(r.user_name,'2026总选奖励'));
   rawRewardStatus.forEach(r=>addRawNameEntry(r.user_name,'总选奖励'));
   rawBirthRewardStatus.forEach(r=>addRawNameEntry(r.user_name,'生公奖励'));
   rawSpecialRankRewards.forEach(r=>addRawNameEntry(r.winner_name,'特殊奖励'));
@@ -168,6 +194,27 @@ async function loadAll(){
   DATA.events = events.data || [];
   DATA.records = rawRecords.map(r=>({...r,user_name:canon(r.user_name),amount:num(r.amount)}));
   DATA.birthRecords = rawBirthRecords.map(r=>({...r,user_name:canon(r.user_name),amount:num(r.amount)}));
+  DATA.election2026Records = rawElection2026Records.map(r=>({
+    ...r,
+    source_type:r.source_type,
+    user_name:canon(r.user_name),
+    value:num(r.value)
+  }));
+  DATA.election2026RewardRules = rawElection2026RewardRules.map(r=>({
+    ...r,
+    threshold_votes:num(r.threshold_votes),
+    sort_order:num(r.sort_order)
+  }));
+  DATA.election2026ManualRewards = rawElection2026ManualRewards.map(r=>({
+    ...r,
+    user_name:canon(r.user_name),
+    fulfilled:!!r.fulfilled
+  }));
+  DATA.election2026RewardStatus = rawElection2026RewardStatus.map(r=>({
+    ...r,
+    user_name:canon(r.user_name),
+    fulfilled:!!r.fulfilled
+  }));
   DATA.rewardStatus = rawRewardStatus.map(r=>({...r,user_name:canon(r.user_name)}));
   DATA.rewardRules = (rewardRules.data || []).map(r=>({
     id:r.id,
@@ -222,6 +269,8 @@ async function loadAll(){
     renderAnnouncementAdmin();
     renderLotteryAdmin();
     renderAliasAdmin();
+    renderElection2026Admin();
+    renderElection2026RewardAdmin();
   }
 }
 
@@ -274,9 +323,175 @@ function birthByUser(){
   }
   return [...map.values()].sort((a,b)=>byAmountDesc(a,b) || byNameAsc(a,b));
 }
+function election2026SourceLabel(sourceType){
+  return ELECTION_2026_SOURCE_LABELS[sourceType] || sourceType || '未知来源';
+}
+function election2026ValueLabel(sourceType){
+  return sourceType==='dark_link_amount' ? '金额' : '票数';
+}
+function election2026PkRecords(){
+  const eventSet=new Set(pkEvents().map(e=>e.event_name));
+  return DATA.records.filter(r=>!eventSet.size || eventSet.has(r.event_name));
+}
+function emptyElection2026Row(name){
+  return {
+    name,
+    publicVotes:0,
+    darkUnrevealedVotes:0,
+    darkRevealedVotes:0,
+    darkLinkAmount:0,
+    darkLinkVotes:0,
+    pkAmount:0,
+    pkVotes:0,
+    totalContribution:0,
+    totalDarkVotes:0
+  };
+}
+function election2026Rows(){
+  // 2026 总选口径：贡献值叠加明票、未翻明暗票和 PK 折算；暗票单独叠加三类暗票来源。
+  const map=new Map();
+  const ensure=name=>{
+    const display=canon(name);
+    const key=nameKey(display);
+    if(!key) return null;
+    const item=map.get(key) || emptyElection2026Row(display);
+    item.name=pickDisplayName(item.name,display);
+    map.set(key,item);
+    return item;
+  };
+  DATA.election2026Records.forEach(record=>{
+    const item=ensure(record.user_name);
+    if(!item) return;
+    const value=num(record.value);
+    if(record.source_type==='public_vote') item.publicVotes+=value;
+    if(record.source_type==='dark_unrevealed') item.darkUnrevealedVotes+=value;
+    if(record.source_type==='dark_revealed') item.darkRevealedVotes+=value;
+    if(record.source_type==='dark_link_amount') item.darkLinkAmount+=value;
+  });
+  aggregateByUser(election2026PkRecords()).forEach(row=>{
+    const item=ensure(row.name);
+    if(!item) return;
+    item.pkAmount+=num(row.total);
+  });
+  return [...map.values()].map(row=>{
+    row.pkVotes=row.pkAmount/PK_VOTE_UNIT_AMOUNT;
+    row.darkLinkVotes=row.darkLinkAmount/PK_VOTE_UNIT_AMOUNT;
+    row.totalContribution=row.publicVotes+row.darkUnrevealedVotes+row.pkVotes;
+    row.totalDarkVotes=row.darkUnrevealedVotes+row.darkRevealedVotes+row.darkLinkVotes;
+    return row;
+  }).filter(row=>
+    row.totalContribution>0 ||
+    row.totalDarkVotes>0 ||
+    row.publicVotes>0 ||
+    row.darkUnrevealedVotes>0 ||
+    row.darkRevealedVotes>0 ||
+    row.darkLinkAmount>0 ||
+    row.pkAmount>0
+  );
+}
+function sortedElection2026Rows(mode='contribution'){
+  const valueKey=mode==='dark' ? 'totalDarkVotes' : 'totalContribution';
+  return election2026Rows()
+    .filter(row=>num(row[valueKey])>0)
+    .sort((a,b)=>num(b[valueKey])-num(a[valueKey]) || byNameAsc(a,b));
+}
+function election2026Summary(rows=election2026Rows()){
+  return rows.reduce((summary,row)=>{
+    summary.publicVotes+=num(row.publicVotes);
+    summary.darkUnrevealedVotes+=num(row.darkUnrevealedVotes);
+    summary.darkRevealedVotes+=num(row.darkRevealedVotes);
+    summary.darkLinkAmount+=num(row.darkLinkAmount);
+    summary.darkLinkVotes+=num(row.darkLinkVotes);
+    summary.pkAmount+=num(row.pkAmount);
+    summary.pkVotes+=num(row.pkVotes);
+    summary.totalContribution+=num(row.totalContribution);
+    summary.totalDarkVotes+=num(row.totalDarkVotes);
+    if(num(row.totalContribution)>0) summary.contributionUsers+=1;
+    if(num(row.totalDarkVotes)>0) summary.darkUsers+=1;
+    return summary;
+  },{publicVotes:0,darkUnrevealedVotes:0,darkRevealedVotes:0,darkLinkAmount:0,darkLinkVotes:0,pkAmount:0,pkVotes:0,totalContribution:0,totalDarkVotes:0,contributionUsers:0,darkUsers:0});
+}
+function election2026RewardRuleKey(rule){
+  return `rule:${rule?.id || ''}`;
+}
+function election2026ManualRewardKey(row){
+  return `manual:${row?.id || ''}`;
+}
+function election2026RewardStatusFor(userName,rewardKey){
+  const key=nameKey(canon(userName));
+  return (DATA.election2026RewardStatus || []).find(row=>nameKey(row.user_name)===key && row.reward_key===rewardKey) || null;
+}
+function election2026ContributionRowForUser(userName){
+  const key=nameKey(canon(userName));
+  return election2026Rows().find(row=>nameKey(row.name)===key) || emptyElection2026Row(canon(userName));
+}
+function election2026RewardsForUser(userName){
+  const name=canon(userName);
+  const key=nameKey(name);
+  if(!key) return [];
+  const contribution=election2026ContributionRowForUser(name);
+  const autoRows=(DATA.election2026RewardRules || [])
+    .filter(rule=>num(contribution.totalContribution)>=num(rule.threshold_votes))
+    .sort((a,b)=>num(a.sort_order)-num(b.sort_order) || num(a.threshold_votes)-num(b.threshold_votes) || String(a.reward_name).localeCompare(String(b.reward_name),'zh-Hans-CN'))
+    .map(rule=>{
+      const rewardKey=election2026RewardRuleKey(rule);
+      const st=election2026RewardStatusFor(name,rewardKey);
+      return {
+        source_type:'rule',
+        source_id:rule.id,
+        reward_key:rewardKey,
+        user_name:name,
+        reward_name:rule.reward_name,
+        threshold_votes:num(rule.threshold_votes),
+        note:rule.note || '',
+        fulfilled:!!st?.fulfilled,
+        fulfilled_date:st?.fulfilled_date || '',
+        totalContribution:contribution.totalContribution
+      };
+    });
+  const manualRows=(DATA.election2026ManualRewards || [])
+    .filter(row=>nameKey(row.user_name)===key)
+    .map(row=>({
+      source_type:'manual',
+      source_id:row.id,
+      reward_key:election2026ManualRewardKey(row),
+      user_name:row.user_name,
+      reward_name:row.reward_name,
+      threshold_votes:null,
+      note:row.note || '',
+      fulfilled:!!row.fulfilled,
+      fulfilled_date:row.fulfilled_date || '',
+      totalContribution:contribution.totalContribution
+    }));
+  return [...autoRows, ...manualRows].sort((a,b)=>
+    Number(a.fulfilled)-Number(b.fulfilled)
+    || (a.source_type==='rule' ? 0 : 1) - (b.source_type==='rule' ? 0 : 1)
+    || num(a.threshold_votes)-num(b.threshold_votes)
+    || String(a.reward_name).localeCompare(String(b.reward_name),'zh-Hans-CN')
+  );
+}
+function allElection2026RewardRows(){
+  const names=new Set();
+  election2026Rows().forEach(row=>names.add(row.name));
+  (DATA.election2026ManualRewards || []).forEach(row=>names.add(row.user_name));
+  return [...names].flatMap(name=>election2026RewardsForUser(name)).sort((a,b)=>
+    Number(a.fulfilled)-Number(b.fulfilled)
+    || String(a.user_name).localeCompare(String(b.user_name),'zh-Hans-CN')
+    || String(a.reward_name).localeCompare(String(b.reward_name),'zh-Hans-CN')
+  );
+}
+function election2026RewardSourceText(row){
+  if(row.source_type==='manual') return '单独增加';
+  return `总贡献值达到 ${fmtVotes(row.threshold_votes)} 票`;
+}
+function election2026RewardStatusPill(row){
+  return row.fulfilled
+    ? `<span class="pill good">已兑现${row.fulfilled_date?' '+escapeHtml(row.fulfilled_date):''}</span>`
+    : '<span class="pill warn">待兑现</span>';
+}
 function allNames(){
   const map=new Map();
-  [...DATA.records.map(r=>r.user_name), ...DATA.birthRecords.map(r=>r.user_name), ...DATA.specialRankRewards.map(r=>r.winner_name)].forEach(name=>{
+  [...DATA.records.map(r=>r.user_name), ...DATA.birthRecords.map(r=>r.user_name), ...DATA.election2026Records.map(r=>r.user_name), ...DATA.election2026ManualRewards.map(r=>r.user_name), ...DATA.specialRankRewards.map(r=>r.winner_name)].forEach(name=>{
     const display=canon(name);
     const key=nameKey(display);
     if(key) map.set(key,pickDisplayName(map.get(key),display));
@@ -1207,6 +1422,13 @@ function operationActionLabel(action){
     update_reward_progress:'更新制作进度',
     upsert_reward_choice_options:'保存奖励选项',
     update_reward_choice:'更新奖励选择',
+    create_election_2026_reward_rule:'新增总选奖励规则',
+    update_election_2026_reward_rule:'修改总选奖励规则',
+    delete_election_2026_reward_rule:'删除总选奖励规则',
+    create_election_2026_manual_reward:'新增总选单独奖励',
+    update_election_2026_manual_reward:'修改总选单独奖励',
+    delete_election_2026_manual_reward:'删除总选单独奖励',
+    update_election_2026_reward_status:'更新总选奖励兑现',
     answer_question:'回复匿名提问'
   }[action] || action || '-';
 }
@@ -1449,6 +1671,188 @@ function renderAll(){
   renderPersonalSearch();
 }
 
+function election2026RankItem(row,index,mode){
+  const rank=index+1;
+  const rankClass = rank===1 ? 'top1' : (rank===2 ? 'top2' : (rank===3 ? 'top3' : 'normal'));
+  const isDark=mode==='dark';
+  const total=isDark ? row.totalDarkVotes : row.totalContribution;
+  const breakdown=isDark
+    ? `未翻明 ${fmtVotes(row.darkUnrevealedVotes)} ｜ 已翻明 ${fmtVotes(row.darkRevealedVotes)} ｜ 暗账折算 ${fmtVotes(row.darkLinkVotes)}`
+    : `明票 ${fmtVotes(row.publicVotes)} ｜ 未翻明 ${fmtVotes(row.darkUnrevealedVotes)} ｜ PK折算 ${fmtVotes(row.pkVotes)}`;
+  return `<div class="electionRankItem rank-${rank<=3 ? rank : 'normal'}">
+    <div class="electionRankNo"><span class="pill rankPill ${rankClass}">#${rank}</span></div>
+    <div class="electionRankName"><b>${escapeHtml(row.name)}</b><span>${escapeHtml(breakdown)}</span></div>
+    <div class="electionRankValue"><b>${fmtVotes(total)}</b><span>票</span><button class="btn electionRewardBtn" data-election-reward-name="${escapeHtml(row.name)}" type="button">奖励</button></div>
+  </div>`;
+}
+function ensureElection2026RewardModal(){
+  let modal=document.getElementById('election2026RewardModal');
+  if(modal) return modal;
+  modal=document.createElement('div');
+  modal.className='modal electionRewardModal';
+  modal.id='election2026RewardModal';
+  modal.innerHTML=`<div class="panel electionRewardDialog">
+    <div class="adminModalHeader">
+      <div>
+        <h2 class="adminPanelTitle" id="election2026RewardDialogTitle">2026总选奖励</h2>
+        <div class="small" id="election2026RewardDialogSub">按当前总贡献值实时计算。</div>
+      </div>
+      <button class="btn electionRewardDialogClose" type="button">关闭</button>
+    </div>
+    <div id="election2026RewardDialogBody" class="lookupResult"></div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('.electionRewardDialogClose').onclick=()=>modal.classList.remove('show');
+  modal.onclick=e=>{
+    if(e.target===modal) modal.classList.remove('show');
+  };
+  return modal;
+}
+function openElection2026RewardDialog(userName){
+  const name=canon(userName);
+  const modal=ensureElection2026RewardModal();
+  const title=modal.querySelector('#election2026RewardDialogTitle');
+  const sub=modal.querySelector('#election2026RewardDialogSub');
+  const body=modal.querySelector('#election2026RewardDialogBody');
+  const contribution=election2026ContributionRowForUser(name);
+  const rewards=election2026RewardsForUser(name);
+  if(title) title.textContent=`${name} · 2026总选奖励`;
+  if(sub) sub.textContent=`总贡献值 ${fmtVotes(contribution.totalContribution)} 票`;
+  if(!state.election2026RewardsAvailable){
+    body.innerHTML=`<div class="emptyState"><b>总选奖励表暂不可用</b><div class="small">请先在 Supabase 执行 2026 总选奖励 SQL。</div></div>`;
+    modal.classList.add('show');
+    return;
+  }
+  const fulfilledCount=rewards.filter(row=>row.fulfilled).length;
+  body.innerHTML=`
+    <div class="lookupSummary rewardLookupSummary">
+      <div class="lookupMini"><span class="small">总贡献值</span><b>${fmtVotes(contribution.totalContribution)} 票</b></div>
+      <div class="lookupMini"><span class="small">奖励数量</span><b>${rewards.length}</b></div>
+      <div class="lookupMini"><span class="small">待兑现</span><b>${rewards.length-fulfilledCount}</b></div>
+    </div>
+    <div class="rewardList electionRewardDialogList">
+      ${rewards.map(row=>`<div class="rewardItem">
+        <div>
+          <b>${escapeHtml(row.reward_name)}</b>
+          <div class="small">${escapeHtml(election2026RewardSourceText(row))}</div>
+          ${row.note ? `<div class="small">备注：${escapeHtml(row.note)}</div>` : ''}
+        </div>
+        <div>${election2026RewardStatusPill(row)}</div>
+      </div>`).join('') || '<div class="emptyState"><b>暂无总选奖励</b><div class="small">当前 ID 暂无达标或单独增加的 2026 总选奖励。</div></div>'}
+    </div>`;
+  modal.classList.add('show');
+}
+function renderElection2026LookupResult(){
+  const input=document.getElementById('election2026Lookup');
+  const out=document.getElementById('election2026LookupResult');
+  if(!input || !out) return;
+  const rows=election2026Rows();
+  const kw=String(input.value||'').trim().toLowerCase();
+  const kwKey=nameKey(kw);
+  if(!kw){
+    out.className='lookupResult small';
+    out.innerHTML='输入完整或部分 ID 后，将显示 2026 总选贡献与暗票明细。';
+    return;
+  }
+  const matches=rows
+    .map(row=>row.name)
+    .filter(name=>name.toLowerCase().includes(kw) || (kwKey && nameKey(name).includes(kwKey)))
+    .sort((a,b)=>a.localeCompare(b,'zh-Hans-CN'));
+  if(!matches.length){
+    out.className='lookupResult small';
+    out.innerHTML='未找到匹配 ID。';
+    return;
+  }
+  const name=matches[0];
+  const row=rows.find(item=>item.name===name) || emptyElection2026Row(name);
+  const candidates=matches.length>1
+    ? `<div class="small matchPillRow">匹配结果：${matches.map(n=>`<span class="pill personal-candidate-pill electionCandidatePill clickablePill" data-election-name="${escapeHtml(n)}">${escapeHtml(n)}</span>`).join('')}</div>`
+    : '';
+  out.className='lookupResult';
+  out.innerHTML=`${candidates}
+    <div class="lookupSummary electionLookupSummary">
+      <div class="lookupMini"><span>总贡献值</span><b>${fmtVotes(row.totalContribution)} 票</b></div>
+      <div class="lookupMini"><span>总暗票</span><b>${fmtVotes(row.totalDarkVotes)} 票</b></div>
+      <div class="lookupMini"><span>PK折算</span><b>${fmtVotes(row.pkVotes)} 票</b></div>
+    </div>
+    <div class="eventAmountList">
+      <div class="eventAmountItem"><span>明票榜</span><b class="amt">${fmtVotes(row.publicVotes)} 票</b></div>
+      <div class="eventAmountItem"><span>未翻明暗票</span><b class="amt">${fmtVotes(row.darkUnrevealedVotes)} 票</b></div>
+      <div class="eventAmountItem"><span>已翻明暗票</span><b class="amt">${fmtVotes(row.darkRevealedVotes)} 票</b></div>
+      <div class="eventAmountItem"><span>暗账链接金额</span><b class="amt">${fmt(row.darkLinkAmount)} / ${fmtVotes(row.darkLinkVotes)} 票</b></div>
+      <div class="eventAmountItem"><span>PK金额</span><b class="amt">${fmt(row.pkAmount)} / ${fmtVotes(row.pkVotes)} 票</b></div>
+    </div>`;
+  out.querySelectorAll('.electionCandidatePill').forEach(pill=>{
+    pill.onclick=()=>{
+      input.value=pill.dataset.electionName || '';
+      renderElection2026LookupResult();
+    };
+  });
+}
+function bindElection2026Controls(){
+  document.querySelectorAll('.electionModeBtn').forEach(btn=>{
+    btn.onclick=()=>{
+      state.election2026Mode=btn.dataset.electionMode || 'contribution';
+      renderTable();
+    };
+  });
+  const input=document.getElementById('election2026Lookup');
+  if(input) input.oninput=renderElection2026LookupResult;
+  document.querySelectorAll('.electionRewardBtn').forEach(btn=>{
+    btn.onclick=()=>openElection2026RewardDialog(btn.dataset.electionRewardName || '');
+  });
+  renderElection2026LookupResult();
+}
+function renderElection2026Page(){
+  if(!state.election2026Available){
+    return `<tr class="overviewHeroRow"><td colspan="3">
+      <div class="overviewPanel electionPanel">
+        <div class="emptyState">
+          <b>2026 总选数据表暂不可用</b>
+          <div class="small">请先在 Supabase 执行本次新增 SQL，之后就可以导入明票、暗票和暗账链接金额。</div>
+        </div>
+      </div>
+    </td></tr>`;
+  }
+  const allRows=election2026Rows();
+  const summary=election2026Summary(allRows);
+  const mode=state.election2026Mode || 'contribution';
+  const rankRows=sortedElection2026Rows(mode);
+  const rankTitle=mode==='dark' ? '总暗票排名' : '总贡献值排名';
+  return `<tr class="overviewHeroRow"><td colspan="3">
+    <div class="overviewPanel electionPanel">
+      <div class="overviewTitle">2026 总选数据总览</div>
+      <div class="overviewDesc">总贡献值 = 明票榜 + 未翻明暗票 + PK金额折算；总暗票 = 未翻明暗票 + 已翻明暗票 + 暗账链接金额折算。</div>
+      <div class="overviewGrid electionKpiGrid">
+        <div class="overviewMini primary"><span>总贡献值</span><b>${fmtVotes(summary.totalContribution)} 票</b></div>
+        <div class="overviewMini"><span>总暗票</span><b>${fmtVotes(summary.totalDarkVotes)} 票</b></div>
+        <div class="overviewMini"><span>明票榜</span><b>${fmtVotes(summary.publicVotes)} 票</b></div>
+        <div class="overviewMini"><span>未翻明暗票</span><b>${fmtVotes(summary.darkUnrevealedVotes)} 票</b></div>
+        <div class="overviewMini"><span>PK折算</span><b>${fmtVotes(summary.pkVotes)} 票</b><small>PK金额 ${fmt(summary.pkAmount)}</small></div>
+        <div class="overviewMini"><span>暗账折算</span><b>${fmtVotes(summary.darkLinkVotes)} 票</b><small>暗账金额 ${fmt(summary.darkLinkAmount)}</small></div>
+      </div>
+      <div class="electionToolbar">
+        <div class="electionModeGroup" role="tablist" aria-label="2026 总选榜单">
+          <button class="btn electionModeBtn ${mode==='contribution'?'active':''}" data-election-mode="contribution" type="button">总贡献值榜</button>
+          <button class="btn electionModeBtn ${mode==='dark'?'active':''}" data-election-mode="dark" type="button">总暗票榜</button>
+        </div>
+        <div class="lookupBox electionLookupBox">
+          <input id="election2026Lookup" list="nameOptions" type="search" placeholder="查询某个 ID 的 2026 总选数据" autocomplete="off">
+        </div>
+      </div>
+      <div id="election2026LookupResult" class="lookupResult small"></div>
+      <div class="electionRankCard">
+        <div class="electionRankTitle">
+          <b>${escapeHtml(rankTitle)}</b>
+          <span>${mode==='dark' ? `${summary.darkUsers} 人有暗票记录` : `${summary.contributionUsers} 人有贡献记录`}</span>
+        </div>
+        <div class="electionRankHeader"><span>排名</span><span>名称</span><span>${mode==='dark'?'总暗票':'总贡献值'}</span></div>
+        <div class="electionRankList">${rankRows.map((row,index)=>election2026RankItem(row,index,mode)).join('') || '<div class="small emptyState">暂无 2026 总选数据。</div>'}</div>
+      </div>
+    </div>
+  </td></tr>`;
+}
+
 function renderTable(){
   // 主内容区渲染入口：按当前 state.view 切换首页、榜单、公告、抽奖和匿名提问。
   const searchEl=document.getElementById('search');
@@ -1518,6 +1922,12 @@ function renderTable(){
     title.textContent='生公排名';
     thead.innerHTML='<tr><th>排名</th><th>名称</th><th>生公金额</th></tr>';
     rows=birthByUser().map((p,i)=>({rank:i+1,name:p.name,value:p.total,search:p.name}));
+  }else if(state.view==='election2026'){
+    title.textContent='2026总选';
+    thead.innerHTML='';
+    tbody.innerHTML=renderElection2026Page();
+    bindElection2026Controls();
+    return;
   }else if(state.view==='personal'){
     title.textContent='总数据排名';
     thead.innerHTML='<tr><th>排名</th><th>名称</th><th>贡献合计</th></tr>';
@@ -1928,7 +2338,7 @@ async function openAdmin(){
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   updateAuthUI();
-  if(user){ renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); }
+  if(user){ renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderElection2026Admin(); renderElection2026RewardAdmin(); }
 }
 function updateAuthUI(){
   if(IS_ADMIN_PAGE) document.body.classList.toggle('adminLoggedIn', !!state.user);
@@ -1952,7 +2362,7 @@ document.getElementById('loginBtn').onclick=async()=>{
   const password=document.getElementById('adminPassword').value;
   const res=await sb.auth.signInWithPassword({email,password});
   if(res.error){document.getElementById('loginStatus').textContent='登录失败：'+res.error.message;return;}
-  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin();
+  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderElection2026Admin(); renderElection2026RewardAdmin();
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
@@ -1962,6 +2372,7 @@ function renderAdminGroup(groupId){
     setDataAdminPanel(state.dataAdminPanel || 'import', {skipScroll:true});
     renderPkEventAdminList();
     renderAliasAdmin();
+    renderElection2026Admin();
   }
   if(groupId==='rewardCenter'){
     setRewardAdminPanel(state.rewardAdminPanel || 'ledger', {skipScroll:true});
@@ -1971,6 +2382,9 @@ function renderAdminGroup(groupId){
     renderRewardProgressAdmin();
     renderRewardChoiceAdmin();
     renderSpecialRankAdmin();
+  }
+  if(groupId==='electionRewardCenter'){
+    renderElection2026RewardAdmin();
   }
   if(groupId==='contentCenter'){
     renderAnnouncementAdmin();
@@ -1991,6 +2405,9 @@ function setDataAdminPanel(panel, options={}){
   document.querySelectorAll('.adminSection[data-admin-group="dataAdmin"][data-data-panel]').forEach(section=>{
     section.classList.toggle('dataPanelActive', section.dataset.dataPanel===state.dataAdminPanel);
   });
+  if(state.dataAdminPanel==='events') renderPkEventAdminList();
+  if(state.dataAdminPanel==='aliases') renderAliasAdmin();
+  if(state.dataAdminPanel==='election2026') renderElection2026Admin();
   if(!options.skipScroll){
     document.getElementById('dataHubAdmin')?.scrollIntoView({block:'start',behavior:'smooth'});
   }
@@ -3115,12 +3532,72 @@ function mergeBirthImportRows(rows){
   });
   return [...map.values()].sort((a,b)=>String(a.batch_name||'').localeCompare(String(b.batch_name||''),'zh-Hans-CN') || byNameAsc(a,b));
 }
+function mergeElection2026Rows(rows){
+  const map=new Map();
+  rows.forEach(r=>{
+    const user_name=canon(r.user_name);
+    const value=num(r.value);
+    if(!user_name || value<=0) return;
+    const key=nameKey(user_name);
+    const prev=map.get(key) || {user_name,value:0};
+    prev.user_name=pickDisplayName(prev.user_name,user_name);
+    prev.value+=value;
+    map.set(key,prev);
+  });
+  return [...map.values()].sort((a,b)=>num(b.value)-num(a.value) || byNameAsc(a,b));
+}
+function looksLikeElection2026Name(value){
+  const text=cleanName(value);
+  if(!text) return false;
+  if(/^(序号|排名|名称|姓名|昵称|金额|票数|总额|合计|小计)$/i.test(text)) return false;
+  if(/(PK数据|数据总表|总选数据|明票|暗票|暗账)/.test(text)) return false;
+  return !/^-?\d+(?:\.\d+)?$/.test(text.replace(/,/g,''));
+}
+function addElection2026Candidate(out,name,value){
+  const user_name=canon(name);
+  const parsed=parseAmountCell(value);
+  if(!user_name || !Number.isFinite(parsed) || parsed<=0) return false;
+  out.push({user_name,value:parsed});
+  return true;
+}
+function extractElection2026Rows(rows){
+  const out=[];
+  rows.forEach(row=>{
+    let added=false;
+    for(let col=0; col<row.length-2; col++){
+      const rankText=String(row[col] ?? '').trim();
+      if(/^\d+$/.test(rankText) && looksLikeElection2026Name(row[col+1])){
+        if(addElection2026Candidate(out,row[col+1],row[col+2])){
+          added=true;
+          col+=2;
+        }
+      }
+    }
+    if(added) return;
+    for(let col=0; col<row.length-1; col++){
+      if(looksLikeElection2026Name(row[col]) && addElection2026Candidate(out,row[col],row[col+1])){
+        col+=1;
+      }
+    }
+  });
+  return mergeElection2026Rows(out);
+}
 async function readExcelRows(file){
   // 读取全部工作表后合并同名订单，给后台预览确认后再写入数据库。
   if(!window.XLSX) throw new Error('Excel 解析库未加载，请刷新页面后重试');
   const buffer=await file.arrayBuffer();
   const workbook=XLSX.read(buffer,{type:'array'});
   return mergeImportRows(extractNameAmountRows(rowsFromWorkbook(workbook)));
+}
+async function readElection2026FileRows(file){
+  if(!file) return [];
+  if(/\.csv$/i.test(file.name)){
+    return extractElection2026Rows(parseCsv(await file.text()));
+  }
+  if(!window.XLSX) throw new Error('Excel 解析库未加载，请刷新页面后重试');
+  const buffer=await file.arrayBuffer();
+  const workbook=XLSX.read(buffer,{type:'array'});
+  return extractElection2026Rows(rowsFromWorkbook(workbook));
 }
 function renderImportPreview(targetId, rows){
   const el=document.getElementById(targetId);
@@ -3139,6 +3616,27 @@ function renderImportPreview(targetId, rows){
     };
   });
 }
+function renderElection2026Preview(rows){
+  const el=document.getElementById('election2026Preview');
+  if(!el) return;
+  el.classList.remove('hidden');
+  const sourceType=document.getElementById('election2026Source')?.value || 'public_vote';
+  const label=election2026ValueLabel(sourceType);
+  const total=rows.reduce((s,r)=>s+num(r.value),0);
+  el.innerHTML=`<div class="small">当前来源：${escapeHtml(election2026SourceLabel(sourceType))}。识别到 ${rows.length} 个名称，合计 ${sourceType==='dark_link_amount'?fmt(total):fmtVotes(total)}${sourceType==='dark_link_amount'?'':' 票'}。确认导入会作为新记录追加；如需重导，请先清空当前来源。</div>
+    <div class="list"><table class="table"><thead><tr><th>名称</th><th>${escapeHtml(label)}</th><th>操作</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr><td><input class="electionNameInput" value="${escapeHtml(r.user_name)}"></td><td><input class="electionValueInput" type="number" step="0.1" value="${num(r.value)}"></td><td><button class="btn bad electionRemoveRow" type="button">剔除</button></td></tr>`).join('')}
+    </tbody></table></div>`;
+  el.querySelectorAll('.electionRemoveRow').forEach(btn=>{
+    btn.onclick=()=>{
+      btn.closest('tr')?.remove();
+      const adjusted=readElection2026PreviewRows();
+      pendingElection2026Rows=buildElection2026Payload(adjusted);
+      renderElection2026Preview(adjusted);
+      document.getElementById('election2026Status').textContent='已剔除一行，请确认后导入';
+    };
+  });
+}
 function readAdjustedPreview(targetId){
   const el=document.getElementById(targetId);
   if(!el) return [];
@@ -3146,6 +3644,43 @@ function readAdjustedPreview(targetId){
     user_name:canon(tr.querySelector('.excelNameInput')?.value),
     amount:num(tr.querySelector('.excelAmountInput')?.value)
   })).filter(r=>r.user_name && Number.isFinite(r.amount) && r.amount>0);
+}
+function readElection2026PreviewRows(){
+  const el=document.getElementById('election2026Preview');
+  if(!el) return [];
+  return mergeElection2026Rows([...el.querySelectorAll('tbody tr')].map(tr=>({
+    user_name:tr.querySelector('.electionNameInput')?.value,
+    value:parseAmountCell(tr.querySelector('.electionValueInput')?.value)
+  })));
+}
+function buildElection2026Payload(rows){
+  const source_type=document.getElementById('election2026Source')?.value || 'public_vote';
+  const batch_name=cleanName(document.getElementById('election2026Batch')?.value || '');
+  return rows.map(r=>({
+    source_type,
+    user_name:canon(r.user_name),
+    value:num(r.value),
+    batch_name:batch_name || null
+  }));
+}
+function resetElection2026Preview(){
+  pendingElection2026Rows=[];
+  const preview=document.getElementById('election2026Preview');
+  if(preview){
+    preview.classList.add('hidden');
+    preview.innerHTML='';
+  }
+  document.getElementById('applyElection2026EditBtn')?.classList.add('hidden');
+  document.getElementById('confirmElection2026Btn')?.classList.add('hidden');
+  const sourceType=document.getElementById('election2026Source')?.value || 'public_vote';
+  const valueInput=document.getElementById('manualElection2026Value');
+  if(valueInput){
+    valueInput.step=sourceType==='dark_link_amount' ? '0.01' : '0.1';
+    valueInput.placeholder=sourceType==='dark_link_amount' ? '金额' : '票数';
+  }
+  const csv=document.getElementById('election2026Csv');
+  if(csv) csv.placeholder=`名称,${election2026ValueLabel(sourceType)}\n波克布林,36`;
+  syncElection2026SingleInput();
 }
 function activeImportKind(kind){
   const selected=document.getElementById('unifiedImportKind')?.value;
@@ -3434,6 +3969,529 @@ async function importCsvByKind(kind){
   const res=await sb.from('birth_fund_records').insert(data);
   status.textContent=res.error?'导入失败：'+res.error.message:`导入成功：${data.length} 条`;
   if(!res.error){await logOperation('import_birth_fund_records', `导入 ${data.length} 条`, {count:data.length}); await loadAll();}
+}
+async function previewElection2026File(){
+  const status=document.getElementById('election2026Status');
+  if(!state.election2026Available){
+    if(status) status.textContent='2026 总选数据表不可用，请先执行新增 SQL。';
+    return;
+  }
+  const file=document.getElementById('election2026File')?.files?.[0];
+  if(!file){if(status) status.textContent='请先选择 Excel 或 CSV 文件'; return;}
+  try{
+    const rows=await readElection2026FileRows(file);
+    if(!rows.length){if(status) status.textContent='没有识别到有效名称和数值，请检查文件中是否有名称、票数或金额列'; return;}
+    pendingElection2026Rows=buildElection2026Payload(rows);
+    renderElection2026Preview(rows);
+    document.getElementById('applyElection2026EditBtn')?.classList.remove('hidden');
+    document.getElementById('confirmElection2026Btn')?.classList.remove('hidden');
+    if(status) status.textContent='识别完成，请核对预览表';
+  }catch(e){
+    if(status) status.textContent='识别失败：'+e.message;
+  }
+}
+function applyElection2026PreviewEdits(){
+  const status=document.getElementById('election2026Status');
+  const rows=readElection2026PreviewRows();
+  if(!rows.length){if(status) status.textContent='调整后的预览表没有有效名称和数值'; return;}
+  pendingElection2026Rows=buildElection2026Payload(rows);
+  renderElection2026Preview(rows);
+  if(status) status.textContent='手动调整已应用，请确认导入';
+}
+function addManualElection2026Row(){
+  const nameInput=document.getElementById('manualElection2026Name');
+  const valueInput=document.getElementById('manualElection2026Value');
+  const status=document.getElementById('election2026Status');
+  const name=canon(nameInput?.value);
+  const value=parseAmountCell(valueInput?.value);
+  if(!name || !Number.isFinite(value) || value<=0){
+    if(status) status.textContent='请填写有效名称和数值';
+    return;
+  }
+  const rows=mergeElection2026Rows([...readElection2026PreviewRows(), {user_name:name,value}]);
+  pendingElection2026Rows=buildElection2026Payload(rows);
+  renderElection2026Preview(rows);
+  document.getElementById('applyElection2026EditBtn')?.classList.remove('hidden');
+  document.getElementById('confirmElection2026Btn')?.classList.remove('hidden');
+  if(nameInput) nameInput.value='';
+  if(valueInput) valueInput.value='';
+  if(status) status.textContent='已加入预览表，请确认后导入';
+}
+async function confirmElection2026Import(){
+  const status=document.getElementById('election2026Status');
+  if(!state.election2026Available){
+    if(status) status.textContent='2026 总选数据表不可用，请先执行新增 SQL。';
+    return;
+  }
+  const adjusted=readElection2026PreviewRows();
+  if(adjusted.length) pendingElection2026Rows=buildElection2026Payload(adjusted);
+  const data=pendingElection2026Rows.filter(row=>row.user_name && num(row.value)>0);
+  if(!data.length){if(status) status.textContent='没有可导入的数据'; return;}
+  const sourceType=data[0]?.source_type || document.getElementById('election2026Source')?.value || 'public_vote';
+  const res=await sb.from('election_2026_vote_records').insert(data);
+  if(res.error){
+    if(status) status.textContent='导入失败：'+res.error.message;
+    return;
+  }
+  await logOperation('import_election_2026_records', `${election2026SourceLabel(sourceType)} ${data.length} 条`, {source_type:sourceType,count:data.length});
+  pendingElection2026Rows=[];
+  resetElection2026Preview();
+  if(status) status.textContent=`导入成功：${election2026SourceLabel(sourceType)} ${data.length} 条`;
+  await loadAll();
+  renderElection2026Admin();
+}
+async function importElection2026Csv(){
+  const status=document.getElementById('election2026Status');
+  if(!state.election2026Available){
+    if(status) status.textContent='2026 总选数据表不可用，请先执行新增 SQL。';
+    return;
+  }
+  const rows=mergeElection2026Rows(parseCsv(document.getElementById('election2026Csv')?.value || '')
+    .filter(Boolean)
+    .flatMap(row=>extractElection2026Rows([row])));
+  if(!rows.length){if(status) status.textContent='没有识别到有效 CSV 数据'; return;}
+  const data=buildElection2026Payload(rows);
+  const sourceType=data[0]?.source_type || 'public_vote';
+  const res=await sb.from('election_2026_vote_records').insert(data);
+  if(res.error){
+    if(status) status.textContent='导入失败：'+res.error.message;
+    return;
+  }
+  await logOperation('import_election_2026_csv', `${election2026SourceLabel(sourceType)} ${data.length} 条`, {source_type:sourceType,count:data.length});
+  document.getElementById('election2026Csv').value='';
+  if(status) status.textContent=`CSV 导入成功：${data.length} 条`;
+  await loadAll();
+  renderElection2026Admin();
+}
+async function clearElection2026Source(){
+  const status=document.getElementById('election2026Status');
+  if(!state.election2026Available){
+    if(status) status.textContent='2026 总选数据表不可用，请先执行新增 SQL。';
+    return;
+  }
+  const sourceType=document.getElementById('election2026Source')?.value || 'public_vote';
+  const label=election2026SourceLabel(sourceType);
+  if(!confirm(`确认清空「${label}」的所有已导入记录吗？此操作不会影响 PK 数据。`)) return;
+  const res=await sb.from('election_2026_vote_records').delete().eq('source_type',sourceType);
+  if(res.error){
+    if(status) status.textContent='清空失败：'+res.error.message;
+    return;
+  }
+  await logOperation('clear_election_2026_source', label, {source_type:sourceType});
+  if(status) status.textContent=`已清空：${label}`;
+  await loadAll();
+  renderElection2026Admin();
+}
+function exportElection2026Csv(){
+  const status=document.getElementById('election2026Status');
+  const rows=sortedElection2026Rows('contribution');
+  if(!rows.length){if(status) status.textContent='暂无可导出的 2026 总选数据'; return;}
+  const header=['排名','名称','总贡献值','总暗票','明票榜','未翻明暗票','已翻明暗票','PK金额','PK折算票','暗账链接金额','暗账折算票'];
+  const lines=rows.map((row,index)=>[
+    index+1,
+    row.name,
+    fmtVotes(row.totalContribution),
+    fmtVotes(row.totalDarkVotes),
+    fmtVotes(row.publicVotes),
+    fmtVotes(row.darkUnrevealedVotes),
+    fmtVotes(row.darkRevealedVotes),
+    fmt(row.pkAmount),
+    fmtVotes(row.pkVotes),
+    fmt(row.darkLinkAmount),
+    fmtVotes(row.darkLinkVotes)
+  ]);
+  const csv='\ufeff'+[header,...lines].map(line=>line.map(value=>`"${String(value).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadText('2026总选数据总览.csv', csv, 'text/csv;charset=utf-8');
+  if(status) status.textContent=`已导出 2026 总选数据：${rows.length} 个 ID`;
+}
+function syncElection2026SingleInput(){
+  const sourceType=document.getElementById('election2026SingleSource')?.value || 'public_vote';
+  const valueInput=document.getElementById('election2026SingleValue');
+  if(valueInput){
+    valueInput.step=sourceType==='dark_link_amount' ? '0.01' : '0.1';
+    valueInput.placeholder=sourceType==='dark_link_amount' ? '金额' : '票数';
+  }
+}
+function clearElection2026SingleForm(message=''){
+  const fields=['election2026EditId','election2026SingleName','election2026SingleValue','election2026SingleBatch','election2026SingleNote'];
+  fields.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value='';
+  });
+  const source=document.getElementById('election2026SingleSource');
+  if(source) source.value='public_vote';
+  syncElection2026SingleInput();
+  const saveBtn=document.getElementById('saveElection2026SingleBtn');
+  if(saveBtn) saveBtn.textContent='保存条目';
+  document.getElementById('cancelElection2026EditBtn')?.classList.add('hidden');
+  const status=document.getElementById('election2026Status');
+  if(status && message) status.textContent=message;
+}
+function fillElection2026SingleForm(recordId){
+  const row=(DATA.election2026Records || []).find(item=>String(item.id)===String(recordId));
+  const status=document.getElementById('election2026Status');
+  if(!row){
+    if(status) status.textContent='没有找到这条记录，请刷新列表后重试';
+    return;
+  }
+  const idInput=document.getElementById('election2026EditId');
+  const source=document.getElementById('election2026SingleSource');
+  const name=document.getElementById('election2026SingleName');
+  const value=document.getElementById('election2026SingleValue');
+  const batch=document.getElementById('election2026SingleBatch');
+  const note=document.getElementById('election2026SingleNote');
+  if(idInput) idInput.value=row.id;
+  if(source) source.value=row.source_type || 'public_vote';
+  if(name) name.value=row.user_name || '';
+  if(value) value.value=num(row.value);
+  if(batch) batch.value=row.batch_name || '';
+  if(note) note.value=row.note || '';
+  syncElection2026SingleInput();
+  const saveBtn=document.getElementById('saveElection2026SingleBtn');
+  if(saveBtn) saveBtn.textContent='保存修改';
+  document.getElementById('cancelElection2026EditBtn')?.classList.remove('hidden');
+  if(status) status.textContent=`正在编辑：${row.user_name}｜${election2026SourceLabel(row.source_type)}`;
+}
+async function saveElection2026Single(){
+  const status=document.getElementById('election2026Status');
+  if(!state.election2026Available){
+    if(status) status.textContent='2026 总选数据表不可用，请先执行新增 SQL。';
+    return;
+  }
+  const editId=document.getElementById('election2026EditId')?.value || '';
+  const sourceType=document.getElementById('election2026SingleSource')?.value || 'public_vote';
+  const userName=canon(document.getElementById('election2026SingleName')?.value);
+  const value=parseAmountCell(document.getElementById('election2026SingleValue')?.value);
+  const batchName=cleanName(document.getElementById('election2026SingleBatch')?.value || '');
+  const note=String(document.getElementById('election2026SingleNote')?.value || '').trim();
+  if(!userName || !Number.isFinite(value) || value<=0){
+    if(status) status.textContent='请填写有效名称和数值';
+    return;
+  }
+  const payload={
+    source_type:sourceType,
+    user_name:userName,
+    value:num(value),
+    batch_name:batchName || null,
+    note:note || null
+  };
+  const query=editId
+    ? sb.from('election_2026_vote_records').update(payload).eq('id',editId)
+    : sb.from('election_2026_vote_records').insert(payload);
+  const res=await query;
+  if(res.error){
+    if(status) status.textContent=(editId ? '修改失败：' : '新增失败：')+res.error.message;
+    return;
+  }
+  await logOperation(editId ? 'update_election_2026_record' : 'create_election_2026_record', `${election2026SourceLabel(sourceType)}｜${userName}`, {...payload,id:editId || null});
+  clearElection2026SingleForm(editId ? `已保存修改：${userName}` : `已新增条目：${userName}`);
+  await loadAll();
+  renderElection2026Admin();
+}
+async function deleteElection2026Record(recordId){
+  const status=document.getElementById('election2026Status');
+  if(!state.election2026Available){
+    if(status) status.textContent='2026 总选数据表不可用，请先执行新增 SQL。';
+    return;
+  }
+  const row=(DATA.election2026Records || []).find(item=>String(item.id)===String(recordId));
+  if(!row){
+    if(status) status.textContent='没有找到这条记录，请刷新列表后重试';
+    return;
+  }
+  if(!confirm(`确认删除「${row.user_name}｜${election2026SourceLabel(row.source_type)}」这条记录吗？`)) return;
+  const res=await sb.from('election_2026_vote_records').delete().eq('id',recordId);
+  if(res.error){
+    if(status) status.textContent='删除失败：'+res.error.message;
+    return;
+  }
+  await logOperation('delete_election_2026_record', `${election2026SourceLabel(row.source_type)}｜${row.user_name}`, row);
+  clearElection2026SingleForm(`已删除条目：${row.user_name}`);
+  await loadAll();
+  renderElection2026Admin();
+}
+function renderElection2026Admin(){
+  const metricsBox=document.getElementById('election2026AdminMetrics');
+  const body=document.getElementById('election2026AdminBody');
+  const status=document.getElementById('election2026Status');
+  if(!metricsBox || !body) return;
+  resetElection2026Preview();
+  if(!state.election2026Available){
+    metricsBox.innerHTML='<div class="adminOverviewCard"><span>数据表状态</span><b>不可用</b><small>请先执行 2026 总选 SQL</small></div>';
+    body.innerHTML='<tr><td colspan="7" class="small">2026 总选数据表暂不可用。</td></tr>';
+    if(status && !status.textContent) status.textContent='请先执行新增 SQL。';
+    return;
+  }
+  const rows=DATA.election2026Records || [];
+  const summary=election2026Summary();
+  const sourceCards=ELECTION_2026_SOURCE_ORDER.map(sourceType=>{
+    const sourceRows=rows.filter(row=>row.source_type===sourceType);
+    const total=sourceRows.reduce((sum,row)=>sum+num(row.value),0);
+    const valueText=sourceType==='dark_link_amount' ? fmt(total) : `${fmtVotes(total)} 票`;
+    return `<div class="adminOverviewCard">
+      <span>${escapeHtml(election2026SourceLabel(sourceType))}</span>
+      <b>${escapeHtml(valueText)}</b>
+      <small>${sourceRows.length} 条记录</small>
+    </div>`;
+  }).join('');
+  metricsBox.innerHTML=`
+    <div class="adminOverviewCard"><span>总贡献值</span><b>${fmtVotes(summary.totalContribution)} 票</b><small>${summary.contributionUsers} 人有贡献记录</small></div>
+    <div class="adminOverviewCard"><span>总暗票</span><b>${fmtVotes(summary.totalDarkVotes)} 票</b><small>${summary.darkUsers} 人有暗票记录</small></div>
+    <div class="adminOverviewCard"><span>PK折算</span><b>${fmtVotes(summary.pkVotes)} 票</b><small>PK金额 ${fmt(summary.pkAmount)}</small></div>
+    <div class="adminOverviewCard"><span>票类记录</span><b>${rows.length}</b><small>明票、暗票和暗账链接</small></div>
+    ${sourceCards}`;
+  const sorted=[...rows].sort((a,b)=>
+    ELECTION_2026_SOURCE_ORDER.indexOf(a.source_type)-ELECTION_2026_SOURCE_ORDER.indexOf(b.source_type) ||
+    byNameAsc(a,b) ||
+    String(b.created_at||'').localeCompare(String(a.created_at||''))
+  );
+  body.innerHTML=sorted.slice(0,300).map(row=>`
+    <tr>
+      <td><span class="pill">${escapeHtml(election2026SourceLabel(row.source_type))}</span></td>
+      <td><b>${escapeHtml(row.user_name)}</b></td>
+      <td>${row.source_type==='dark_link_amount' ? fmt(row.value) : `${fmtVotes(row.value)} 票`}</td>
+      <td>${escapeHtml(row.batch_name || '-')}</td>
+      <td>${escapeHtml(row.note || '-')}</td>
+      <td>${escapeHtml(formatDateTime(row.created_at))}</td>
+      <td>
+        <div class="adminRowActions electionRecordActions">
+          <button class="btn election-record-edit" data-id="${escapeHtml(row.id)}" type="button">编辑</button>
+          <button class="btn bad election-record-delete" data-id="${escapeHtml(row.id)}" type="button">删除</button>
+        </div>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="small">暂无票类数据。PK 折算会由总选单场数据实时计算。</td></tr>';
+  body.querySelectorAll('.election-record-edit').forEach(btn=>{
+    btn.onclick=()=>fillElection2026SingleForm(btn.dataset.id);
+  });
+  body.querySelectorAll('.election-record-delete').forEach(btn=>{
+    btn.onclick=()=>deleteElection2026Record(btn.dataset.id);
+  });
+  if(rows.length>300){
+    body.insertAdjacentHTML('beforeend', `<tr><td colspan="7" class="small">仅显示前 300 条，完整数据请导出 CSV 查看。</td></tr>`);
+  }
+  if(status && !status.textContent) status.textContent='2026 总选数据已加载。';
+}
+function clearElection2026RewardRuleForm(message=''){
+  ['electionRewardRuleId','electionRewardRuleThreshold','electionRewardRuleName','electionRewardRuleNote','electionRewardRuleSort'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value='';
+  });
+  const btn=document.getElementById('saveElectionRewardRuleBtn');
+  if(btn) btn.textContent='保存规则';
+  document.getElementById('cancelElectionRewardRuleEditBtn')?.classList.add('hidden');
+  const status=document.getElementById('electionRewardStatus');
+  if(status && message) status.textContent=message;
+}
+function clearElection2026ManualRewardForm(message=''){
+  ['electionManualRewardId','electionManualRewardUser','electionManualRewardName','electionManualRewardNote','electionManualRewardDate'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value='';
+  });
+  const fulfilled=document.getElementById('electionManualRewardFulfilled');
+  if(fulfilled) fulfilled.value='false';
+  const btn=document.getElementById('saveElectionManualRewardBtn');
+  if(btn) btn.textContent='保存单独奖励';
+  document.getElementById('cancelElectionManualRewardEditBtn')?.classList.add('hidden');
+  const status=document.getElementById('electionRewardStatus');
+  if(status && message) status.textContent=message;
+}
+function fillElection2026RewardRule(ruleId){
+  const rule=(DATA.election2026RewardRules || []).find(row=>String(row.id)===String(ruleId));
+  const status=document.getElementById('electionRewardStatus');
+  if(!rule){if(status) status.textContent='没有找到这条规则，请刷新后重试'; return;}
+  document.getElementById('electionRewardRuleId').value=rule.id;
+  document.getElementById('electionRewardRuleThreshold').value=num(rule.threshold_votes);
+  document.getElementById('electionRewardRuleName').value=rule.reward_name || '';
+  document.getElementById('electionRewardRuleNote').value=rule.note || '';
+  document.getElementById('electionRewardRuleSort').value=rule.sort_order || '';
+  const btn=document.getElementById('saveElectionRewardRuleBtn');
+  if(btn) btn.textContent='保存修改';
+  document.getElementById('cancelElectionRewardRuleEditBtn')?.classList.remove('hidden');
+  if(status) status.textContent=`正在编辑规则：${rule.reward_name}`;
+}
+function fillElection2026ManualReward(rowId){
+  const row=(DATA.election2026ManualRewards || []).find(item=>String(item.id)===String(rowId));
+  const status=document.getElementById('electionRewardStatus');
+  if(!row){if(status) status.textContent='没有找到这条单独奖励，请刷新后重试'; return;}
+  document.getElementById('electionManualRewardId').value=row.id;
+  document.getElementById('electionManualRewardUser').value=row.user_name || '';
+  document.getElementById('electionManualRewardName').value=row.reward_name || '';
+  document.getElementById('electionManualRewardNote').value=row.note || '';
+  document.getElementById('electionManualRewardFulfilled').value=row.fulfilled ? 'true' : 'false';
+  document.getElementById('electionManualRewardDate').value=row.fulfilled_date || '';
+  const btn=document.getElementById('saveElectionManualRewardBtn');
+  if(btn) btn.textContent='保存修改';
+  document.getElementById('cancelElectionManualRewardEditBtn')?.classList.remove('hidden');
+  if(status) status.textContent=`正在编辑单独奖励：${row.user_name}｜${row.reward_name}`;
+}
+async function saveElection2026RewardRule(){
+  const status=document.getElementById('electionRewardStatus');
+  if(!state.election2026RewardsAvailable){if(status) status.textContent='总选奖励数据表不可用，请先执行新增 SQL。'; return;}
+  const id=document.getElementById('electionRewardRuleId')?.value || '';
+  const threshold=parseAmountCell(document.getElementById('electionRewardRuleThreshold')?.value);
+  const rewardName=cleanName(document.getElementById('electionRewardRuleName')?.value || '');
+  const note=String(document.getElementById('electionRewardRuleNote')?.value || '').trim();
+  const sortValue=document.getElementById('electionRewardRuleSort')?.value;
+  if(!rewardName || !Number.isFinite(threshold) || threshold<=0){
+    if(status) status.textContent='请填写有效门槛和奖励名称';
+    return;
+  }
+  const payload={
+    threshold_votes:num(threshold),
+    reward_name:rewardName,
+    note:note || null,
+    sort_order:sortValue==='' ? 0 : Math.trunc(num(sortValue))
+  };
+  const res=id
+    ? await sb.from('election_2026_reward_rules').update(payload).eq('id',id)
+    : await sb.from('election_2026_reward_rules').insert(payload);
+  if(res.error){if(status) status.textContent=(id?'规则修改失败：':'规则新增失败：')+res.error.message; return;}
+  await logOperation(id ? 'update_election_2026_reward_rule' : 'create_election_2026_reward_rule', `${fmtVotes(threshold)}票｜${rewardName}`, {...payload,id:id || null});
+  clearElection2026RewardRuleForm(id ? `已保存规则：${rewardName}` : `已新增规则：${rewardName}`);
+  await loadAll();
+  renderElection2026RewardAdmin();
+}
+async function deleteElection2026RewardRule(ruleId){
+  const status=document.getElementById('electionRewardStatus');
+  const rule=(DATA.election2026RewardRules || []).find(row=>String(row.id)===String(ruleId));
+  if(!rule){if(status) status.textContent='没有找到这条规则，请刷新后重试'; return;}
+  if(!confirm(`确认删除这条总选奖励规则吗？\n\n${fmtVotes(rule.threshold_votes)}票｜${rule.reward_name}`)) return;
+  const res=await sb.from('election_2026_reward_rules').delete().eq('id',ruleId);
+  if(res.error){if(status) status.textContent='规则删除失败：'+res.error.message; return;}
+  await sb.from('election_2026_reward_status').delete().eq('reward_key',election2026RewardRuleKey(rule));
+  await logOperation('delete_election_2026_reward_rule', `${fmtVotes(rule.threshold_votes)}票｜${rule.reward_name}`, rule);
+  clearElection2026RewardRuleForm(`已删除规则：${rule.reward_name}`);
+  await loadAll();
+  renderElection2026RewardAdmin();
+}
+async function saveElection2026ManualReward(){
+  const status=document.getElementById('electionRewardStatus');
+  if(!state.election2026RewardsAvailable){if(status) status.textContent='总选奖励数据表不可用，请先执行新增 SQL。'; return;}
+  const id=document.getElementById('electionManualRewardId')?.value || '';
+  const userName=canon(document.getElementById('electionManualRewardUser')?.value);
+  const rewardName=cleanName(document.getElementById('electionManualRewardName')?.value || '');
+  const note=String(document.getElementById('electionManualRewardNote')?.value || '').trim();
+  const fulfilled=document.getElementById('electionManualRewardFulfilled')?.value === 'true';
+  const dateInput=String(document.getElementById('electionManualRewardDate')?.value || '').trim();
+  if(!userName || !rewardName){
+    if(status) status.textContent='请填写 ID 和奖励名称';
+    return;
+  }
+  const payload={
+    user_name:userName,
+    reward_name:rewardName,
+    note:note || null,
+    fulfilled,
+    fulfilled_date:fulfilled ? (dateInput || new Date().toISOString().slice(0,10)) : null
+  };
+  const res=id
+    ? await sb.from('election_2026_manual_rewards').update(payload).eq('id',id)
+    : await sb.from('election_2026_manual_rewards').insert(payload);
+  if(res.error){if(status) status.textContent=(id?'单独奖励修改失败：':'单独奖励新增失败：')+res.error.message; return;}
+  await logOperation(id ? 'update_election_2026_manual_reward' : 'create_election_2026_manual_reward', `${userName}｜${rewardName}`, {...payload,id:id || null});
+  clearElection2026ManualRewardForm(id ? `已保存单独奖励：${userName}` : `已新增单独奖励：${userName}`);
+  await loadAll();
+  renderElection2026RewardAdmin();
+}
+async function deleteElection2026ManualReward(rowId){
+  const status=document.getElementById('electionRewardStatus');
+  const row=(DATA.election2026ManualRewards || []).find(item=>String(item.id)===String(rowId));
+  if(!row){if(status) status.textContent='没有找到这条单独奖励，请刷新后重试'; return;}
+  if(!confirm(`确认删除这条单独奖励吗？\n\n${row.user_name}｜${row.reward_name}`)) return;
+  const res=await sb.from('election_2026_manual_rewards').delete().eq('id',rowId);
+  if(res.error){if(status) status.textContent='单独奖励删除失败：'+res.error.message; return;}
+  await logOperation('delete_election_2026_manual_reward', `${row.user_name}｜${row.reward_name}`, row);
+  clearElection2026ManualRewardForm(`已删除单独奖励：${row.user_name}`);
+  await loadAll();
+  renderElection2026RewardAdmin();
+}
+async function updateElection2026RewardFulfilled(userName,rewardKey,sourceType,sourceId,nextFulfilled){
+  const status=document.getElementById('electionRewardStatus');
+  if(!state.election2026RewardsAvailable){if(status) status.textContent='总选奖励数据表不可用，请先执行新增 SQL。'; return;}
+  const date=nextFulfilled ? new Date().toISOString().slice(0,10) : null;
+  let res;
+  if(sourceType==='manual'){
+    res=await sb.from('election_2026_manual_rewards').update({fulfilled:nextFulfilled,fulfilled_date:date}).eq('id',sourceId);
+  }else{
+    res=await sb.from('election_2026_reward_status').upsert({
+      user_name:canon(userName),
+      reward_key:rewardKey,
+      fulfilled:nextFulfilled,
+      fulfilled_date:date,
+      updated_at:new Date().toISOString()
+    },{onConflict:'user_name,reward_key'});
+  }
+  if(res.error){if(status) status.textContent='兑现状态保存失败：'+res.error.message; return;}
+  await logOperation('update_election_2026_reward_status', `${userName}｜${nextFulfilled?'已兑现':'待兑现'}`, {user_name:userName,reward_key:rewardKey,source_type:sourceType,source_id:sourceId,fulfilled:nextFulfilled});
+  if(status) status.textContent=`已更新 ${userName} 的总选奖励状态`;
+  await loadAll();
+  renderElection2026RewardAdmin();
+}
+function renderElection2026RewardAdmin(){
+  const metrics=document.getElementById('electionRewardMetrics');
+  const ruleBody=document.getElementById('electionRewardRuleBody');
+  const manualBody=document.getElementById('electionManualRewardBody');
+  const ledgerBody=document.getElementById('electionRewardLedgerBody');
+  const status=document.getElementById('electionRewardStatus');
+  if(!metrics || !ruleBody || !manualBody || !ledgerBody) return;
+  if(!state.election2026RewardsAvailable){
+    metrics.innerHTML='<div class="adminOverviewCard"><span>数据表状态</span><b>不可用</b><small>请先执行 2026 总选奖励 SQL</small></div>';
+    ruleBody.innerHTML='<tr><td colspan="4" class="small">总选奖励规则表暂不可用。</td></tr>';
+    manualBody.innerHTML='<tr><td colspan="4" class="small">总选单独奖励表暂不可用。</td></tr>';
+    ledgerBody.innerHTML='<tr><td colspan="4" class="small">总选奖励状态表暂不可用。</td></tr>';
+    if(status && !status.textContent) status.textContent='请先执行新增 SQL。';
+    return;
+  }
+  const ledgerRows=allElection2026RewardRows();
+  const pending=ledgerRows.filter(row=>!row.fulfilled).length;
+  const fulfilled=ledgerRows.length-pending;
+  metrics.innerHTML=`
+    <div class="adminOverviewCard"><span>达标规则</span><b>${DATA.election2026RewardRules.length}</b><small>按总贡献值自动触发</small></div>
+    <div class="adminOverviewCard"><span>单独奖励</span><b>${DATA.election2026ManualRewards.length}</b><small>人工绑定到具体 ID</small></div>
+    <div class="adminOverviewCard"><span>待兑现</span><b>${pending}</b><small>当前需要处理</small></div>
+    <div class="adminOverviewCard"><span>已兑现</span><b>${fulfilled}</b><small>仅统计总选奖励</small></div>`;
+  ruleBody.innerHTML=[...(DATA.election2026RewardRules || [])].sort((a,b)=>num(a.sort_order)-num(b.sort_order) || num(a.threshold_votes)-num(b.threshold_votes)).map(rule=>`
+    <tr>
+      <td><b>${fmtVotes(rule.threshold_votes)} 票</b></td>
+      <td>${escapeHtml(rule.reward_name || '-')}</td>
+      <td>${escapeHtml(rule.note || '-')}</td>
+      <td><div class="adminRowActions electionRecordActions"><button class="btn election-rule-edit" data-id="${escapeHtml(rule.id)}" type="button">编辑</button><button class="btn bad election-rule-delete" data-id="${escapeHtml(rule.id)}" type="button">删除</button></div></td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" class="small">暂无达标奖励规则。</td></tr>';
+  manualBody.innerHTML=[...(DATA.election2026ManualRewards || [])].map(row=>`
+    <tr>
+      <td><b>${escapeHtml(row.user_name || '-')}</b></td>
+      <td>${escapeHtml(row.reward_name || '-')}<div class="small">${escapeHtml(row.note || '')}</div></td>
+      <td>${election2026RewardStatusPill(row)}</td>
+      <td><div class="adminRowActions electionRecordActions"><button class="btn election-manual-edit" data-id="${escapeHtml(row.id)}" type="button">编辑</button><button class="btn bad election-manual-delete" data-id="${escapeHtml(row.id)}" type="button">删除</button></div></td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" class="small">暂无单独奖励。</td></tr>';
+  const kw=String(document.getElementById('electionRewardSearch')?.value || '').trim().toLowerCase();
+  const filter=document.getElementById('electionRewardFilter')?.value || 'pending';
+  const filtered=ledgerRows.filter(row=>{
+    if(filter==='pending' && row.fulfilled) return false;
+    if(filter==='fulfilled' && !row.fulfilled) return false;
+    if(!kw) return true;
+    const text=[row.user_name,row.reward_name,row.note,election2026RewardSourceText(row)].join(' ').toLowerCase();
+    return text.includes(kw);
+  });
+  ledgerBody.innerHTML=filtered.map(row=>`
+    <tr>
+      <td>${election2026RewardStatusPill(row)}</td>
+      <td><b>${escapeHtml(row.user_name)}</b><div>${escapeHtml(row.reward_name)}</div>${row.note?`<div class="small">备注：${escapeHtml(row.note)}</div>`:''}</td>
+      <td>${escapeHtml(election2026RewardSourceText(row))}</td>
+      <td><button class="btn ${row.fulfilled?'':'good'} election-reward-toggle" data-user="${escapeHtml(row.user_name)}" data-key="${escapeHtml(row.reward_key)}" data-source="${escapeHtml(row.source_type)}" data-id="${escapeHtml(row.source_id)}" data-next="${row.fulfilled?'false':'true'}" type="button">${row.fulfilled?'改回待兑现':'标记已兑现'}</button></td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" class="small">当前筛选条件下暂无总选奖励。</td></tr>';
+  ruleBody.querySelectorAll('.election-rule-edit').forEach(btn=>btn.onclick=()=>fillElection2026RewardRule(btn.dataset.id));
+  ruleBody.querySelectorAll('.election-rule-delete').forEach(btn=>btn.onclick=()=>deleteElection2026RewardRule(btn.dataset.id));
+  manualBody.querySelectorAll('.election-manual-edit').forEach(btn=>btn.onclick=()=>fillElection2026ManualReward(btn.dataset.id));
+  manualBody.querySelectorAll('.election-manual-delete').forEach(btn=>btn.onclick=()=>deleteElection2026ManualReward(btn.dataset.id));
+  ledgerBody.querySelectorAll('.election-reward-toggle').forEach(btn=>{
+    btn.onclick=()=>updateElection2026RewardFulfilled(btn.dataset.user,btn.dataset.key,btn.dataset.source,btn.dataset.id,btn.dataset.next==='true');
+  });
+  if(status && !status.textContent) status.textContent=`总选奖励已加载：${ledgerRows.length} 条资格`;
 }
 const importPkBtn=document.getElementById('importPkBtn');
 if(importPkBtn) importPkBtn.onclick=async()=>{
@@ -4130,6 +5188,49 @@ const addManualUnifiedRowBtn=document.getElementById('addManualUnifiedRowBtn');
 if(addManualUnifiedRowBtn) addManualUnifiedRowBtn.onclick=()=>addManualImportRow(activeImportKind());
 const importUnifiedCsvBtn=document.getElementById('importUnifiedCsvBtn');
 if(importUnifiedCsvBtn) importUnifiedCsvBtn.onclick=()=>importCsvByKind(activeImportKind());
+
+const election2026Source=document.getElementById('election2026Source');
+if(election2026Source) election2026Source.onchange=()=>{
+  resetElection2026Preview();
+  const status=document.getElementById('election2026Status');
+  if(status) status.textContent=`当前来源：${election2026SourceLabel(election2026Source.value)}`;
+};
+const previewElection2026Btn=document.getElementById('previewElection2026Btn');
+if(previewElection2026Btn) previewElection2026Btn.onclick=previewElection2026File;
+const applyElection2026EditBtn=document.getElementById('applyElection2026EditBtn');
+if(applyElection2026EditBtn) applyElection2026EditBtn.onclick=applyElection2026PreviewEdits;
+const confirmElection2026Btn=document.getElementById('confirmElection2026Btn');
+if(confirmElection2026Btn) confirmElection2026Btn.onclick=confirmElection2026Import;
+const addManualElection2026Btn=document.getElementById('addManualElection2026Btn');
+if(addManualElection2026Btn) addManualElection2026Btn.onclick=addManualElection2026Row;
+const importElection2026CsvBtn=document.getElementById('importElection2026CsvBtn');
+if(importElection2026CsvBtn) importElection2026CsvBtn.onclick=importElection2026Csv;
+const clearElection2026SourceBtn=document.getElementById('clearElection2026SourceBtn');
+if(clearElection2026SourceBtn) clearElection2026SourceBtn.onclick=clearElection2026Source;
+const exportElection2026Btn=document.getElementById('exportElection2026Btn');
+if(exportElection2026Btn) exportElection2026Btn.onclick=exportElection2026Csv;
+const election2026SingleSource=document.getElementById('election2026SingleSource');
+if(election2026SingleSource) election2026SingleSource.onchange=syncElection2026SingleInput;
+const saveElection2026SingleBtn=document.getElementById('saveElection2026SingleBtn');
+if(saveElection2026SingleBtn) saveElection2026SingleBtn.onclick=saveElection2026Single;
+const cancelElection2026EditBtn=document.getElementById('cancelElection2026EditBtn');
+if(cancelElection2026EditBtn) cancelElection2026EditBtn.onclick=()=>clearElection2026SingleForm('已取消编辑');
+const saveElectionRewardRuleBtn=document.getElementById('saveElectionRewardRuleBtn');
+if(saveElectionRewardRuleBtn) saveElectionRewardRuleBtn.onclick=saveElection2026RewardRule;
+const cancelElectionRewardRuleEditBtn=document.getElementById('cancelElectionRewardRuleEditBtn');
+if(cancelElectionRewardRuleEditBtn) cancelElectionRewardRuleEditBtn.onclick=()=>clearElection2026RewardRuleForm('已取消规则编辑');
+const saveElectionManualRewardBtn=document.getElementById('saveElectionManualRewardBtn');
+if(saveElectionManualRewardBtn) saveElectionManualRewardBtn.onclick=saveElection2026ManualReward;
+const cancelElectionManualRewardEditBtn=document.getElementById('cancelElectionManualRewardEditBtn');
+if(cancelElectionManualRewardEditBtn) cancelElectionManualRewardEditBtn.onclick=()=>clearElection2026ManualRewardForm('已取消单独奖励编辑');
+const reloadElectionRewardsBtn=document.getElementById('reloadElectionRewardsBtn');
+if(reloadElectionRewardsBtn) reloadElectionRewardsBtn.onclick=async()=>{await loadAll(); renderElection2026RewardAdmin();};
+['electionRewardSearch','electionRewardFilter'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el) return;
+  const eventName=el.tagName==='INPUT' ? 'input' : 'change';
+  el.addEventListener(eventName, renderElection2026RewardAdmin);
+});
 
 const previewPkExcelBtn=document.getElementById('previewPkExcelBtn');
 if(previewPkExcelBtn) previewPkExcelBtn.onclick=()=>previewOrderExcel('pk');
