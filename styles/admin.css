@@ -20,7 +20,6 @@
   background:#f8fafc;
   color:var(--admin-ink);
 }
-.adminPage .accessGate,
 .adminPage .siteHero,
 .adminPage > .wrap{
   display:none;
@@ -257,6 +256,55 @@
 .adminPage .rewardHubSection{
   margin-bottom:2px;
 }
+.adminPage .rewardHubSection{
+  border-color:#dbe4f2;
+  background:#fff;
+  box-shadow:0 12px 36px rgba(48,73,130,.08);
+  color:#172033;
+}
+.rewardOpsHeader{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(220px,.28fr);
+  gap:18px;
+  align-items:start;
+}
+.adminPage .rewardHubSection .rewardOpsHeader h3{
+  margin-bottom:6px;
+  font-size:24px;
+  color:#111827;
+}
+.adminPage .rewardHubSection .rewardOpsHeader .adminLead{
+  max-width:760px;
+  color:#667085;
+}
+.rewardActionStatus{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid #dbe4f2;
+  border-radius:14px;
+  background:#f8fafc;
+  color:#334155;
+  font-size:13px;
+  font-weight:900;
+  box-shadow:0 8px 22px rgba(48,73,130,.06);
+}
+.rewardActionStatus.success{
+  border-color:#99f6e4;
+  background:#ecfdf5;
+  color:#047857;
+}
+.rewardActionStatus.error{
+  border-color:#fecaca;
+  background:#fef2f2;
+  color:#b91c1c;
+}
+.rewardActionStatus.info{
+  border-color:#c7d2fe;
+  background:#eef2ff;
+  color:#3730a3;
+}
 .adminPage .dataPanelNav,
 .adminPage .rewardPanelNav{
   display:grid;
@@ -272,7 +320,10 @@
   grid-template-columns:repeat(3,minmax(0,1fr));
 }
 .adminPage .rewardPanelNav{
-  grid-template-columns:repeat(4,minmax(0,1fr));
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  background:#f8fafc;
+  border-color:#dbe4f2;
+  box-shadow:0 8px 24px rgba(48,73,130,.05);
 }
 .adminPage .dataPanelNav .btn,
 .adminPage .rewardPanelNav .btn{
@@ -284,6 +335,17 @@
 }
 .adminPage .dataPanelNav .btn.active,
 .adminPage .rewardPanelNav .btn.active{
+  background:#172033;
+  color:#fff;
+  border-color:#172033;
+}
+.adminPage .rewardPanelNav .btn{
+  border-radius:12px;
+}
+.adminPage .rewardHubSection .rewardPanelNav .btn{
+  color:#334155;
+}
+.adminPage .rewardHubSection .rewardPanelNav .btn.active{
   background:#172033;
   color:#fff;
   border-color:#172033;
@@ -304,12 +366,12 @@
   min-width:0;
 }
 .adminPage #rewardHubAdmin{order:0}
-.adminPage #rewardTaskAdmin,
 .adminPage #ruleImportAdmin,
+.adminPage #rewardAdmin,
 .adminPage #rewardChoiceAdmin,
-.adminPage #rewardAdmin{order:1}
-.adminPage #specialRankAdmin,
-.adminPage #rewardProgressAdmin{order:2}
+.adminPage #rewardProgressAdmin,
+.adminPage #rewardFulfillmentAdmin{order:1}
+.adminPage #specialRankAdmin{order:2}
 .adminPage .dataImportSection,
 .adminPage .dataWorkbenchCard{
   border:1px solid #e5eaf3;
@@ -410,6 +472,17 @@
   background:#fff;
   padding:14px;
   box-shadow:0 8px 24px rgba(15,23,42,.035);
+}
+.rewardLedgerSyncDetails{
+  margin:14px 0;
+}
+.rewardLedgerSyncDetails summary{
+  cursor:pointer;
+  color:#172033;
+  font-weight:900;
+}
+.rewardLedgerSyncDetails[open] summary{
+  margin-bottom:10px;
 }
 .rewardLedgerMetrics{
   grid-template-columns:repeat(3,minmax(0,1fr));
@@ -543,8 +616,58 @@
 }
 .manualImportBox .adminSubhead{margin:0 0 8px}
 .rewardBatchBar{margin-top:8px}
+.rewardOpsSummary{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:10px;
+  margin-top:14px;
+}
+.rewardOpsStat{
+  min-height:104px;
+  display:grid;
+  gap:7px;
+  align-content:start;
+  border:1px solid #dbe4f2;
+  border-radius:14px;
+  background:linear-gradient(180deg,#fff,#f8fafc);
+  color:#172033;
+  padding:12px;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+  box-shadow:0 8px 20px rgba(48,73,130,.045);
+  transition:transform .16s ease,border-color .16s ease,background .16s ease;
+}
+.rewardOpsSummary .small{
+  color:#667085;
+}
+.rewardOpsStat:hover{
+  transform:translateY(-1px);
+  border-color:#4f6fd9;
+  background:#fff;
+}
+.rewardOpsStat span{
+  display:block;
+  color:#475569;
+  font-size:12px;
+  font-weight:900;
+}
+.rewardOpsStat b{
+  display:block;
+  color:#2f55c7;
+  font-size:28px;
+  line-height:1;
+}
+.rewardOpsStat small{
+  color:#667085;
+  line-height:1.35;
+  font-weight:700;
+}
 .rewardListFilters{
   grid-template-columns:1.4fr repeat(4,minmax(150px,1fr)) minmax(130px,.8fr) auto;
+}
+.rewardProgressFilters{
+  grid-template-columns:minmax(260px,1fr) minmax(160px,.35fr) minmax(150px,.35fr) auto;
 }
 .reward-row-check,
 #rewardSelectAll{
@@ -559,6 +682,54 @@
 }
 .choiceControl{display:grid;grid-template-columns:minmax(160px,1fr) auto;gap:8px;align-items:center}
 .choiceTable td:last-child{text-align:left}
+.rewardProgressTable{
+  max-height:560px!important;
+}
+.rewardProgressTable .table th:nth-child(1){width:28%}
+.rewardProgressTable .table th:nth-child(2){width:150px}
+.rewardProgressTable .table th:nth-child(3){width:150px}
+.rewardProgressTable .table th:nth-child(4){width:24%}
+.rewardProgressTable .table th:nth-child(5){width:160px}
+.rewardProgressTable .table td:last-child,
+.rewardProgressTable .table th:last-child{
+  width:96px;
+  text-align:right;
+}
+.rewardProgressGroup td{
+  background:#eef4ff!important;
+  color:#334155!important;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:0;
+}
+.rewardProgressRow select,
+.rewardProgressRow input{
+  width:100%;
+  min-height:38px;
+}
+.rewardProgressRow b{
+  color:#172033;
+}
+.rewardProgressRow .pill{
+  margin-top:6px;
+}
+.rowInlineStatus{
+  min-height:34px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  color:#64748b;
+  font-size:12px;
+  font-weight:800;
+  line-height:1.35;
+}
+.rewardProgressSaved td{
+  background:#f0fdf4!important;
+  transition:background .2s ease;
+}
+.rewardProgressSaved .rowInlineStatus{
+  color:#047857;
+}
 .rewardModule{position:relative;overflow:hidden}
 .rewardModule:before{content:"";position:absolute;inset:0 0 auto;height:4px;background:linear-gradient(90deg,#4f6fd9,#0d9488,#8b5cf6)}
 .rewardModule h3{padding-top:4px}

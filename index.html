@@ -13,17 +13,7 @@
 <link rel="stylesheet" href="styles/table.css" />
 <link rel="stylesheet" href="styles/mobile.css" />
 </head>
-<body class="accessLocked">
-<div class="accessGate" id="accessGate" aria-modal="true" role="dialog">
-  <form class="accessPanel" id="accessForm">
-    <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
-    <h2>访问验证</h2>
-    <div class="sub">请输入统一访问密码后继续查看数据站。</div>
-    <input id="sitePasswordInput" type="password" placeholder="输入访问密码" autocomplete="current-password" />
-    <button class="btn active" type="submit">进入数据站</button>
-    <div class="status" id="accessStatus"></div>
-  </form>
-</div>
+<body>
 <header class="siteHero">
   <div class="siteVersion">v1.1 测试版</div>
   <a class="adminEntryLink" href="admin.html">管理员入口</a>
@@ -497,20 +487,6 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>模块</th><th>访问次数</th><th>独立访客</th></tr></thead><tbody id="visitStatsModuleBody"></tbody></table></div>
         <div class="adminSubhead">最近访问</div>
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>时间</th><th>模块</th><th>设备 / 访客</th></tr></thead><tbody id="visitLogBody"></tbody></table></div>
-      </div>
-
-      <div class="adminSection systemModule" id="siteSettingsAdmin" data-admin-group="systemCenter">
-        <h3>系统设置</h3>
-        <div class="adminLead">这里维护数据站统一访问密码，以及用户输入正确后多久不需要再次输入。</div>
-        <div class="formGrid two">
-          <input id="siteAccessPasswordAdmin" type="password" placeholder="新访问密码，留空则不修改">
-          <input id="siteAccessTtlDaysAdmin" type="number" min="1" max="365" step="1" placeholder="免输入天数">
-        </div>
-        <div class="row adminActionRow">
-          <button class="btn good" id="saveSiteSettingsBtn" type="button">保存访问设置</button>
-          <button class="btn" id="reloadSiteSettingsBtn" type="button">刷新设置</button>
-        </div>
-        <div class="status" id="siteSettingsStatus"></div>
       </div>
 
       <div class="adminSection contentModule" id="questionAdmin" data-admin-group="contentCenter">

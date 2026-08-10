@@ -4,13 +4,10 @@
 const SUPABASE_URL = "https://nmjjgqlcwiqbvpjkyink.supabase.co";
 const SUPABASE_KEY = "sb_publishable_lcaNfMEmLYmIk3Yhlu7Rzw_WfF5qtgX";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-const SITE_ACCESS_STORAGE_KEY = "zty_support_access_granted";
 const VISITOR_ID_STORAGE_KEY = "zty_support_visitor_id";
 const VISIT_LOG_DEDUPE_PREFIX = "zty_support_visit_";
 const VISIT_LOG_DEDUPE_MS = 5 * 60 * 1000;
-const DEFAULT_SITE_ACCESS_PASSWORD_HASH = "116070d3ce1fe6fcbf1a3147511bc32442b455a08e571814a490499a09371b5f";
-const DEFAULT_SITE_ACCESS_TTL_DAYS = 7;
-const SITE_SETTINGS_KEYS = ['access_password_hash','access_password','access_ttl_days'];
+const PK_VOTE_UNIT_AMOUNT = 33;
 const VISIT_VIEW_LABELS = {
   overview:'数据总览',
   personal:'总数据排名',
@@ -24,12 +21,12 @@ const VISIT_VIEW_LABELS = {
 };
 
 let DATA = { events:[], records:[], birthRecords:[], rewardStatus:[], aliases:[], autoNames:new Map(), rawNameEntries:[], rewardRules:[], birthRewardRules:[], birthRewardStatus:[], specialRankRewards:[], announcements:[], lotteryRecords:[], rewardProgress:[], rewardChoiceOptions:[], rewardChoices:[], rewardLedger:[] };
-let state = { view:'overview', event:'', user:null, questionFilter:'pending', dataAdminPanel:'import', rewardAdminPanel:'tasks', rewardProgressAvailable:true, rewardChoicesAvailable:true, rewardLedgerAvailable:true, visitLogsAvailable:true };
-let siteSettings = { access_password_hash: DEFAULT_SITE_ACCESS_PASSWORD_HASH, access_ttl_days: DEFAULT_SITE_ACCESS_TTL_DAYS, available:false };
+let state = { view:'overview', event:'', user:null, questionFilter:'pending', dataAdminPanel:'import', rewardAdminPanel:'ledger', rewardProgressAvailable:true, rewardChoicesAvailable:true, rewardLedgerAvailable:true, visitLogsAvailable:true, lastSavedRewardProgress:'' };
 const IS_ADMIN_PAGE = document.body.classList.contains('adminPage');
 let pendingPkExcelRows = [];
 let pendingBirthExcelRows = [];
 let currentRewardAdminRows = [];
+let currentRewardProgressRows = [];
 const REWARD_PROVIDER_TYPES = {
   support_club:'应援会提供',
   zhou_tongyue:'周童玥提供'
@@ -224,7 +221,6 @@ async function loadAll(){
     renderSpecialRankAdmin();
     renderAnnouncementAdmin();
     renderLotteryAdmin();
-    renderSiteSettingsAdmin();
     renderAliasAdmin();
   }
 }
@@ -1052,7 +1048,6 @@ function currentDeviceType(){
   return window.matchMedia('(max-width: 900px)').matches ? 'mobile' : 'desktop';
 }
 async function recordVisit(viewName){
-  if(document.body.classList.contains('accessLocked')) return;
   const view=viewName || state.view || 'overview';
   const dedupeKey=VISIT_LOG_DEDUPE_PREFIX + view;
   const now=Date.now();
@@ -1511,14 +1506,14 @@ function renderTable(){
     return;
   }else if(state.view==='participant'){
     title.textContent='总选排名';
-    thead.innerHTML='<tr class="noteRow"><td colspan="3" class="small">票数按 33.5 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>总选金额</th></tr>';
-    rows=aggregateByUser(DATA.records).map((p,i)=>({rank:i+1,name:p.name,value:p.total,votes:p.total/33.5,showVotes:true,search:p.name}));
+    thead.innerHTML=`<tr class="noteRow"><td colspan="3" class="small">票数按 ${PK_VOTE_UNIT_AMOUNT} 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>总选金额</th></tr>`;
+    rows=aggregateByUser(DATA.records).map((p,i)=>({rank:i+1,name:p.name,value:p.total,votes:p.total/PK_VOTE_UNIT_AMOUNT,showVotes:true,search:p.name}));
   }else if(state.view==='event'){
     const event=state.event || pkEvents()[0]?.event_name;
     title.textContent=`${event} · 总选单场排名`;
-    thead.innerHTML='<tr class="noteRow"><td colspan="3" class="small">票数按 33.5 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>金额</th></tr>';
+    thead.innerHTML=`<tr class="noteRow"><td colspan="3" class="small">票数按 ${PK_VOTE_UNIT_AMOUNT} 元折算 1 票，仅用于总选相关榜单展示。</td></tr><tr><th>排名</th><th>名称</th><th>金额</th></tr>`;
     rows=aggregateByEventUser(DATA.records,event)
-      .map((r,i)=>({rank:i+1,name:r.user_name,value:num(r.amount),votes:num(r.amount)/33.5,showVotes:true,search:`${r.user_name} ${r.event_name}`}));
+      .map((r,i)=>({rank:i+1,name:r.user_name,value:num(r.amount),votes:num(r.amount)/PK_VOTE_UNIT_AMOUNT,showVotes:true,search:`${r.user_name} ${r.event_name}`}));
   }else if(state.view==='birth'){
     title.textContent='生公排名';
     thead.innerHTML='<tr><th>排名</th><th>名称</th><th>生公金额</th></tr>';
@@ -1933,7 +1928,7 @@ async function openAdmin(){
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   updateAuthUI();
-  if(user){ renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderSiteSettingsAdmin(); }
+  if(user){ renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); }
 }
 function updateAuthUI(){
   if(IS_ADMIN_PAGE) document.body.classList.toggle('adminLoggedIn', !!state.user);
@@ -1957,7 +1952,7 @@ document.getElementById('loginBtn').onclick=async()=>{
   const password=document.getElementById('adminPassword').value;
   const res=await sb.auth.signInWithPassword({email,password});
   if(res.error){document.getElementById('loginStatus').textContent='登录失败：'+res.error.message;return;}
-  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin(); renderSiteSettingsAdmin();
+  state.user=res.data.user; updateAuthUI(); renderAdminOverview(); renderRewardTaskAdmin(); renderRewardLedgerAdmin(); renderAdminRewards(); renderRewardProgressAdmin(); renderRewardChoiceAdmin(); renderSpecialRankAdmin(); renderAnnouncementAdmin(); renderLotteryAdmin();
 };
 document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut(); state.user=null; updateAuthUI();};
 
@@ -1969,7 +1964,7 @@ function renderAdminGroup(groupId){
     renderAliasAdmin();
   }
   if(groupId==='rewardCenter'){
-    setRewardAdminPanel(state.rewardAdminPanel || 'tasks', {skipScroll:true});
+    setRewardAdminPanel(state.rewardAdminPanel || 'ledger', {skipScroll:true});
     renderRewardTaskAdmin();
     renderRewardLedgerAdmin();
     renderAdminRewards();
@@ -1983,7 +1978,6 @@ function renderAdminGroup(groupId){
     renderQuestionAdmin();
   }
   if(groupId==='systemCenter'){
-    renderSiteSettingsAdmin();
     renderVisitStatsAdmin();
     renderOperationLogs();
   }
@@ -2028,7 +2022,7 @@ function renderPkEventAdminList(){
 }
 
 function setRewardAdminPanel(panel, options={}){
-  state.rewardAdminPanel=panel || 'tasks';
+  state.rewardAdminPanel=panel || 'ledger';
   document.querySelectorAll('.rewardPanelBtn').forEach(btn=>{
     btn.classList.toggle('active', btn.dataset.rewardPanel===state.rewardAdminPanel);
   });
@@ -2104,7 +2098,7 @@ async function renderAdminOverview(){
     pendingQuestions=(questionRes.data || []).filter(q=>!q.answer_text).length;
   }
   const taskCards=[
-    ['普通未兑现', normalUnfulfilled, '快速搜索 ID 或批量处理普通奖励', 'rewardAdmin'],
+    ['普通未兑现', normalUnfulfilled, '快速搜索 ID 或批量处理普通奖励', 'rewardFulfillmentAdmin'],
     ['特殊未兑现', specialUnfulfilled, '检查特殊排名奖励兑现状态', 'specialRankAdmin'],
     ['待选择奖励', pendingChoices, '为二选一或多选一奖励保存具体选择', 'rewardChoiceAdmin'],
     ['待回复提问', pendingQuestions, '查看匿名提问并回复用户', 'questionAdmin'],
@@ -2122,33 +2116,41 @@ async function renderAdminOverview(){
 
 function rewardTaskMetrics(){
   const rows=allAdminRewardRows();
+  const total=rows.length;
   const normalUnfulfilled=rows.filter(r=>['pk','birth'].includes(r.source_type) && !r.fulfilled).length;
   const specialUnfulfilled=rows.filter(r=>r.source_type==='special' && !r.fulfilled).length;
   const pendingChoices=rows.filter(r=>rewardChoiceFilterState(r)==='pending').length;
   const needsProgress=rows.filter(r=>rewardChoiceFilterState(r)==='needs_progress').length;
   const activeProgress=(DATA.rewardProgress || []).filter(r=>r.progress_status && !['已兑现','已完结'].includes(r.progress_status)).length;
-  return {normalUnfulfilled,specialUnfulfilled,pendingChoices,needsProgress,activeProgress};
+  return {total,normalUnfulfilled,specialUnfulfilled,pendingChoices,needsProgress,activeProgress};
+}
+
+function setRewardGlobalStatus(text,type='info'){
+  const el=document.getElementById('rewardActionStatus');
+  if(!el) return;
+  el.textContent=text || '等待操作';
+  el.className=`rewardActionStatus ${type}`;
 }
 
 function renderRewardTaskAdmin(){
-  const tasks=document.getElementById('rewardTaskGrid');
+  const tasks=document.getElementById('rewardOpsSummaryGrid');
   if(!tasks) return;
   const metrics=rewardTaskMetrics();
   const cards=[
-    ['普通未兑现', metrics.normalUnfulfilled, '进入兑现工作台，搜索 ID 或批量更新', 'rewardAdmin'],
-    ['特殊未兑现', metrics.specialUnfulfilled, '进入特殊排名奖励配置并处理兑现', 'specialRankAdmin'],
-    ['待选择奖励', metrics.pendingChoices, '为二选一或多选一奖励保存具体选择', 'rewardChoiceAdmin'],
-    ['待编辑进度', metrics.needsProgress, '已选择但还没有设置制作进度', 'rewardProgressAdmin'],
-    ['制作中项目', metrics.activeProgress, '查看仍在推进中的奖励制作状态', 'rewardProgressAdmin']
+    ['待兑现', metrics.normalUnfulfilled + metrics.specialUnfulfilled, '按 ID 快速处理发放状态', 'rewardFulfillmentAdmin'],
+    ['待选择', metrics.pendingChoices, '处理二选一或多选一奖励', 'rewardChoiceAdmin'],
+    ['待编辑进度', metrics.needsProgress, '补全已选择奖励的制作状态', 'rewardProgressAdmin'],
+    ['制作中', metrics.activeProgress, '查看仍在推进的奖品', 'rewardProgressAdmin'],
+    ['台账总数', metrics.total, '筛选、导出和批量处理', 'rewardAdmin']
   ];
   tasks.innerHTML=cards.map(([label,value,note,tabId])=>`
-    <button class="adminTaskCard" type="button" data-admin-target="${escapeHtml(tabId)}">
+    <button class="rewardOpsStat" type="button" data-admin-target="${escapeHtml(tabId)}">
       <span>${escapeHtml(label)}</span>
       <b>${escapeHtml(value)}</b>
       <small>${escapeHtml(note)}</small>
     </button>
   `).join('');
-  tasks.querySelectorAll('.adminTaskCard').forEach(btn=>btn.onclick=()=>setAdminTab(btn.dataset.adminTarget));
+  tasks.querySelectorAll('.rewardOpsStat').forEach(btn=>btn.onclick=()=>setAdminTab(btn.dataset.adminTarget));
 }
 
 function allAdminRewardRows(){
@@ -2315,7 +2317,7 @@ function renderAdminRewards(){
       <td><button class="btn ${r.fulfilled?'bad':'good'} reward-toggle" data-i="${i}">${r.fulfilled?'标为未兑现':'标为已兑现'}</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="4" class="small">当前筛选条件下暂无奖励数据</td></tr>';
-  document.querySelectorAll('.reward-toggle').forEach(btn=>btn.onclick=()=>toggleReward(rows[+btn.dataset.i]));
+  document.querySelectorAll('.reward-toggle').forEach(btn=>btn.onclick=()=>toggleReward(rows[+btn.dataset.i],btn));
 }
 
 function quickFulfillRowsForName(name){
@@ -2370,11 +2372,13 @@ async function toggleQuickFulfill(row, button=null){
     button.textContent='保存中...';
   }
   if(status) status.textContent=`正在更新：${row.reward_name} - ${row.event_name}`;
+  setRewardGlobalStatus(`正在更新兑现状态：${row.user_name}`,'info');
   const date=nextFulfilled ? ((document.getElementById('quickFulfillDate')?.value || '').trim() || todayDateText()) : null;
   try{
     const res=await saveFulfillmentRow(row,nextFulfilled,date,'quick');
     if(res?.error){
       if(status) status.textContent='保存失败：'+res.error.message;
+      setRewardGlobalStatus('兑现状态保存失败：'+res.error.message,'error');
       if(button){
         button.disabled=false;
         button.textContent=row.fulfilled ? '标为未兑现' : '标记已兑现';
@@ -2383,6 +2387,7 @@ async function toggleQuickFulfill(row, button=null){
     }
     if(!res){
       if(status) status.textContent='保存失败：未识别的奖励类型';
+      setRewardGlobalStatus('兑现状态保存失败：未识别的奖励类型','error');
       if(button){
         button.disabled=false;
         button.textContent=row.fulfilled ? '标为未兑现' : '标记已兑现';
@@ -2390,12 +2395,14 @@ async function toggleQuickFulfill(row, button=null){
       return;
     }
     if(status) status.textContent=`已更新：${row.reward_name} - ${row.event_name}`;
+    setRewardGlobalStatus(`已保存兑现状态：${row.user_name}`,'success');
     await loadAll();
     renderQuickFulfillAdmin();
     renderAdminRewards();
     renderSpecialRankAdmin();
   }catch(err){
     if(status) status.textContent='保存失败：'+(err?.message || err);
+    setRewardGlobalStatus('兑现状态保存失败：'+(err?.message || err),'error');
     if(button){
       button.disabled=false;
       button.textContent=row.fulfilled ? '标为未兑现' : '标记已兑现';
@@ -2448,12 +2455,28 @@ async function saveFulfillmentRow(row,nextFulfilled,date,mode='admin'){
   return res;
 }
 
-async function toggleReward(r){
+async function toggleReward(r,button=null){
   const newVal=!r.fulfilled;
   const date = newVal ? (document.getElementById('rewardDate').value.trim() || r.fulfilled_date || '') : null;
+  if(button){
+    button.disabled=true;
+    button.textContent='保存中...';
+  }
+  setRewardLedgerActionStatus(`正在更新：${r.user_name}｜${r.reward_name}`);
+  setRewardGlobalStatus(`正在更新奖励兑现状态：${r.user_name}`,'info');
   const res=await saveFulfillmentRow(r,newVal,date,'admin');
-  if(res.error){alert('保存失败：'+res.error.message);return;}
+  if(res.error){
+    if(button){
+      button.disabled=false;
+      button.textContent=r.fulfilled?'标为未兑现':'标为已兑现';
+    }
+    setRewardLedgerActionStatus('保存失败：'+res.error.message);
+    setRewardGlobalStatus('保存失败：'+res.error.message,'error');
+    return;
+  }
   await loadAll();
+  setRewardLedgerActionStatus(`已更新：${r.user_name}｜${r.reward_name}`);
+  setRewardGlobalStatus(`已保存兑现状态：${r.user_name}`,'success');
   renderAdminRewards();
 }
 
@@ -2462,8 +2485,14 @@ function selectedRewardAdminRows(){
   return checked.map(input=>currentRewardAdminRows[+input.dataset.i]).filter(Boolean);
 }
 
+function setRewardLedgerActionStatus(text){
+  const status=document.getElementById('rewardBatchStatus');
+  if(status) status.textContent=text || '';
+  if(text) setRewardGlobalStatus(text,'info');
+}
+
 async function applyRewardBatch(){
-  const status=document.getElementById('quickFulfillStatus');
+  const status=document.getElementById('rewardBatchStatus') || document.getElementById('quickFulfillStatus');
   const filter=document.getElementById('rewardBatchFilter')?.value || 'visible';
   const action=document.getElementById('rewardBatchAction')?.value || 'fulfilled';
   const nextFulfilled=action==='fulfilled';
@@ -2473,82 +2502,177 @@ async function applyRewardBatch(){
     if(filter==='unfulfilled') rows=rows.filter(r=>!r.fulfilled);
     if(filter==='fulfilled') rows=rows.filter(r=>r.fulfilled);
   }
-  if(!rows.length){ if(status) status.textContent='没有可批量更新的奖励'; return; }
+  if(!rows.length){ if(status) status.textContent='没有可批量更新的奖励'; setRewardGlobalStatus('没有可批量更新的奖励','error'); return; }
   const date=nextFulfilled ? ((document.getElementById('rewardDate')?.value || '').trim() || todayDateText()) : null;
   if(status) status.textContent=`正在批量更新 ${rows.length} 条奖励...`;
+  setRewardGlobalStatus(`正在批量更新 ${rows.length} 条奖励...`,'info');
   const errors=[];
   for(const row of rows){
     const res=await saveFulfillmentRow(row,nextFulfilled,date,'batch');
     if(res?.error) errors.push(res.error.message);
   }
   if(status) status.textContent=errors.length ? `批量更新完成，但有 ${errors.length} 条失败：${errors[0]}` : `批量更新完成：${rows.length} 条`;
+  setRewardGlobalStatus(errors.length ? `批量更新完成，但有 ${errors.length} 条失败` : `批量更新完成：${rows.length} 条`, errors.length ? 'error' : 'success');
   await loadAll();
   renderAdminRewards();
 }
 
+function rewardProgressDone(status, providerType='support_club'){
+  if(providerType==='zhou_tongyue') return status==='已兑现';
+  return ['已抽取','已完结','已兑现'].includes(status);
+}
+
+function rewardProgressUiState(item){
+  const progress=progressForReward(item.reward_name);
+  const providerType=progress?.provider_type || item.provider_type || inferRewardProviderType(null,item.reward_name);
+  const savedStatus=progress?.progress_status || '';
+  const selectedStatus=savedStatus || statusesForProvider(providerType)[0];
+  return {
+    progress,
+    providerType,
+    savedStatus,
+    selectedStatus,
+    note:progress?.progress_note || '',
+    done:rewardProgressDone(savedStatus,providerType)
+  };
+}
+
+function rewardProgressStatusOptionsHtml(providerType,currentStatus=''){
+  const statuses=statusesForProvider(providerType);
+  const selected=statuses.includes(currentStatus) ? currentStatus : statuses[0];
+  return statuses.map(status=>`<option value="${escapeHtml(status)}"${status===selected?' selected':''}>${escapeHtml(status)}</option>`).join('');
+}
+
+function filterRewardProgressItems(options){
+  const kw=(document.getElementById('rewardProgressSearch')?.value || '').toLowerCase().trim();
+  const providerFilter=document.getElementById('rewardProgressProviderFilter')?.value || 'all';
+  const stateFilter=document.getElementById('rewardProgressStateFilter')?.value || 'all';
+  return options.filter(item=>{
+    const ui=rewardProgressUiState(item);
+    const searchable=`${item.reward_name} ${item.reward_type || ''} ${item.category || ''}`.toLowerCase();
+    if(kw && !searchable.includes(kw)) return false;
+    if(providerFilter!=='all' && ui.providerType!==providerFilter) return false;
+    if(stateFilter==='missing' && ui.savedStatus) return false;
+    if(stateFilter==='active' && (!ui.savedStatus || ui.done)) return false;
+    if(stateFilter==='done' && !ui.done) return false;
+    return true;
+  });
+}
+
 function renderRewardProgressAdmin(){
-  const select=document.getElementById('rewardProgressName');
   const body=document.getElementById('rewardProgressBody');
   const status=document.getElementById('rewardProgressStatusText');
-  if(!select || !body) return;
-  const options=allRewardProgressOptions();
-  const current=select.value;
-  select.innerHTML=groupedRewardProgressOptions(options).map(([category,items])=>`
-    <optgroup label="${escapeHtml(category)}">
-      ${items.map(x=>`<option value="${escapeHtml(x.reward_name)}">${escapeHtml(x.reward_name)}${x.reward_type?`｜${escapeHtml(x.reward_type)}`:''}</option>`).join('')}
-    </optgroup>
-  `).join('');
-  if(current && options.some(x=>x.reward_name===current)) select.value=current;
-  const selected=select.value || options[0]?.reward_name || '';
-  const progress=progressForReward(selected);
-  const option=rewardOptionMap().get(selected);
-  const providerType=progress?.provider_type || option?.provider_type || inferRewardProviderType(null,selected);
-  const providerSelect=document.getElementById('rewardProgressProvider');
-  const statusSelect=document.getElementById('rewardProgressStatus');
-  const noteInput=document.getElementById('rewardProgressNote');
-  if(providerSelect) providerSelect.value=providerType;
-  if(statusSelect) updateRewardProgressStatusOptions(providerType, progress?.progress_status || '');
-  if(noteInput) noteInput.value=progress?.progress_note || '';
-  if(status) status.textContent=state.rewardProgressAvailable ? '' : '请先在 Supabase 创建 reward_progress 表，创建后刷新页面即可使用。';
-  body.innerHTML=options.map(item=>{
-    const p=progressForReward(item.reward_name);
-    const itemProvider=p?.provider_type || item.provider_type || inferRewardProviderType(null,item.reward_name);
-    const itemStatus=p?.progress_status || (itemProvider==='zhou_tongyue' ? '待兑现' : '暂未更新');
-    return `<tr>
-      <td><b>${escapeHtml(item.reward_name)}</b><div class="small">${escapeHtml(item.reward_type || '其他')} ｜ ${escapeHtml(providerTypeText(itemProvider))}</div></td>
-      <td><span class="pill ${progressStatusClass(itemStatus,itemProvider)}">${escapeHtml(itemStatus)}</span><div class="small">${p?.updated_at?escapeHtml(formatDateTime(p.updated_at)):''}</div></td>
-      <td>${escapeHtml(p?.progress_note || '-')}</td>
+  if(!body) return;
+  const allOptions=allRewardProgressOptions();
+  const options=filterRewardProgressItems(allOptions);
+  currentRewardProgressRows=options;
+  if(status){
+    status.textContent=state.rewardProgressAvailable
+      ? `当前显示 ${options.length} 项奖励制作状态，可直接在每一行修改后保存。`
+      : '请先在 Supabase 创建 reward_progress 表，创建后刷新页面即可使用。';
+  }
+  let lastCategory='';
+  const rowsHtml=options.map((item,i)=>{
+    const ui=rewardProgressUiState(item);
+    const category=item.category || '其他奖励';
+    const groupRow=category!==lastCategory
+      ? `<tr class="rewardProgressGroup"><td colspan="6">${escapeHtml(category)}</td></tr>`
+      : '';
+    lastCategory=category;
+    const displayStatus=ui.savedStatus || '暂未设置';
+    const savedClass=state.lastSavedRewardProgress===item.reward_name ? ' rewardProgressSaved' : '';
+    const feedback=state.lastSavedRewardProgress===item.reward_name
+      ? '刚刚保存成功'
+      : (ui.progress?.updated_at ? `上次更新 ${escapeHtml(formatDateTime(ui.progress.updated_at))}` : '等待保存');
+    return `${groupRow}<tr class="rewardProgressRow${savedClass}" data-i="${i}">
+      <td>
+        <b>${escapeHtml(item.reward_name)}</b>
+        <div class="small">${escapeHtml(item.reward_type || '其他')}</div>
+      </td>
+      <td>
+        <select class="reward-progress-provider" data-i="${i}">
+          ${Object.entries(REWARD_PROVIDER_TYPES).map(([value,label])=>`<option value="${escapeHtml(value)}"${value===ui.providerType?' selected':''}>${escapeHtml(label)}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select class="reward-progress-status" data-i="${i}">
+          ${rewardProgressStatusOptionsHtml(ui.providerType,ui.selectedStatus)}
+        </select>
+        <div class="small"><span class="pill ${progressStatusClass(displayStatus,ui.providerType)}">${escapeHtml(displayStatus)}</span></div>
+      </td>
+      <td><input class="reward-progress-note" data-i="${i}" value="${escapeHtml(ui.note)}" placeholder="进度说明，可空"></td>
+      <td><div class="rowInlineStatus" data-i="${i}">${feedback}</div></td>
+      <td><button class="btn good reward-progress-save" data-i="${i}" type="button">保存</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="3" class="small">暂无已导入奖励</td></tr>';
+  }).join('');
+  body.innerHTML=rowsHtml || '<tr><td colspan="6" class="small">当前筛选条件下暂无奖励。</td></tr>';
+  body.querySelectorAll('.reward-progress-provider').forEach(select=>{
+    select.onchange=()=>{
+      const i=select.dataset.i;
+      const statusSelect=body.querySelector(`.reward-progress-status[data-i="${i}"]`);
+      if(statusSelect) statusSelect.innerHTML=rewardProgressStatusOptionsHtml(select.value,statusSelect.value);
+    };
+  });
+  body.querySelectorAll('.reward-progress-save').forEach(btn=>{
+    btn.onclick=()=>saveRewardProgressRow(+btn.dataset.i,btn);
+  });
 }
 
-function updateRewardProgressStatusOptions(providerType, currentStatus=''){
-  const statusSelect=document.getElementById('rewardProgressStatus');
-  if(!statusSelect) return;
-  const statuses=statusesForProvider(providerType);
-  statusSelect.innerHTML=statuses.map(x=>`<option>${escapeHtml(x)}</option>`).join('');
-  statusSelect.value=statuses.includes(currentStatus) ? currentStatus : statuses[0];
-}
-
-async function saveRewardProgress(){
-  const reward_name=document.getElementById('rewardProgressName')?.value || '';
-  const provider_type=document.getElementById('rewardProgressProvider')?.value || 'support_club';
-  const progress_status=document.getElementById('rewardProgressStatus')?.value || '';
-  const progress_note=document.getElementById('rewardProgressNote')?.value.trim() || '';
+async function saveRewardProgressRow(index,button=null){
+  const item=currentRewardProgressRows[index];
   const status=document.getElementById('rewardProgressStatusText');
-  if(!reward_name){status.textContent='暂无可选择的奖励';return;}
-  if(!statusesForProvider(provider_type).includes(progress_status)){status.textContent='请选择有效进度';return;}
-  const reward_type=rewardOptionMap().get(reward_name)?.reward_type || '其他';
-  const payload={reward_name,reward_type,provider_type,progress_status,progress_note:progress_note || null,updated_at:new Date().toISOString()};
-  const res=await upsertRewardProgressPayload(payload);
-  if(res.error){
-    state.rewardProgressAvailable=false;
-    status.textContent='保存失败：'+res.error.message;
+  if(!item){if(status) status.textContent='请选择需要保存的奖励'; return;}
+  const row=document.querySelector(`.rewardProgressRow[data-i="${index}"]`);
+  const provider_type=row?.querySelector('.reward-progress-provider')?.value || 'support_club';
+  const progress_status=row?.querySelector('.reward-progress-status')?.value || '';
+  const progress_note=row?.querySelector('.reward-progress-note')?.value.trim() || '';
+  const inline=row?.querySelector('.rowInlineStatus');
+  if(!statusesForProvider(provider_type).includes(progress_status)){
+    if(status) status.textContent='请选择有效进度';
+    if(inline) inline.textContent='状态无效';
     return;
   }
-  status.textContent='保存成功';
-  await logOperation('update_reward_progress', `${reward_name}｜${progress_status}`, payload);
+  const payload={
+    reward_name:item.reward_name,
+    reward_type:rewardOptionMap().get(item.reward_name)?.reward_type || item.reward_type || '其他',
+    provider_type,
+    progress_status,
+    progress_note:progress_note || null,
+    updated_at:new Date().toISOString()
+  };
+  if(button){
+    button.disabled=true;
+    button.textContent='保存中...';
+  }
+  if(inline) inline.textContent='正在保存...';
+  if(status) status.textContent=`正在保存：${item.reward_name}`;
+  setRewardGlobalStatus(`正在保存制作进度：${item.reward_name}`,'info');
+  const res=await upsertRewardProgressPayload(payload);
+  if(res.error){
+    if(/relation|does not exist|schema|column/i.test(res.error.message || '')) state.rewardProgressAvailable=false;
+    if(button){
+      button.disabled=false;
+      button.textContent='保存';
+    }
+    if(inline) inline.textContent='保存失败';
+    if(status) status.textContent='保存失败：'+res.error.message;
+    setRewardGlobalStatus('制作进度保存失败：'+res.error.message,'error');
+    return;
+  }
+  state.lastSavedRewardProgress=item.reward_name;
+  if(inline) inline.textContent='保存成功';
+  if(status) status.textContent=`已保存：${item.reward_name}｜${progress_status}`;
+  setRewardGlobalStatus(`已保存制作进度：${item.reward_name}`,'success');
+  await logOperation('update_reward_progress', `${item.reward_name}｜${progress_status}`, payload);
   await loadAll();
+  renderRewardProgressAdmin();
+  if(status) status.textContent=`已保存：${item.reward_name}｜${progress_status}`;
+  setTimeout(()=>{
+    if(state.lastSavedRewardProgress===item.reward_name){
+      state.lastSavedRewardProgress='';
+      renderRewardProgressAdmin();
+    }
+  },1800);
 }
 
 function allRewardChoiceTargets(){
@@ -2641,10 +2765,12 @@ async function saveRewardChoiceOptions(){
     updated_at:new Date().toISOString()
   };
   const res=await sb.from('reward_choice_options').upsert(payload,{onConflict:'source_type,event_name,reward_name'});
-  if(res.error){if(status) status.textContent='保存失败：'+res.error.message; return;}
-  if(status) status.textContent='奖励选项已保存';
+  if(res.error){if(status) status.textContent='保存失败：'+res.error.message; setRewardGlobalStatus('奖励选项保存失败：'+res.error.message,'error'); return;}
+  setRewardGlobalStatus(`已保存奖励选项：${target.reward_name}`,'success');
   await logOperation('upsert_reward_choice_options', `${target.reward_name}｜${sourceTypeText(target.source_type)}`, payload);
   await loadAll();
+  renderRewardChoiceAdmin();
+  if(status) status.textContent='奖励选项已保存';
 }
 async function saveRewardChoice(row, selected=''){
   const status=document.getElementById('rewardChoiceStatus');
@@ -2659,11 +2785,15 @@ async function saveRewardChoice(row, selected=''){
     updated_at:new Date().toISOString()
   };
   const res=await sb.from('reward_choices').upsert(payload,{onConflict:'user_name,source_type,event_name,reward_name'});
-  if(res.error){if(status) status.textContent='保存失败：'+res.error.message; return;}
+  if(res.error){if(status) status.textContent='保存失败：'+res.error.message; setRewardGlobalStatus('奖励选择保存失败：'+res.error.message,'error'); return;}
   if(selected && row.fulfilled) await syncRewardProgressCompleted(selected,`${sourceTypeText(row.source_type)}具体选项`);
-  if(status) status.textContent=selected ? `已保存选择：${selected}，请到奖励制作进度中维护该具体奖励状态` : '已标记为待选择';
+  setRewardGlobalStatus(selected ? `已保存 ${row.user_name} 的奖励选择` : `已标记 ${row.user_name} 为待选择`,'success');
   await logOperation('update_reward_choice', `${row.user_name}｜${row.reward_name}｜${selected || '待选择'}`, payload);
   await loadAll();
+  renderRewardChoiceAdmin();
+  renderAdminRewards();
+  renderRewardProgressAdmin();
+  if(status) status.textContent=selected ? `已保存选择：${selected}，请到奖励制作进度中维护该具体奖励状态` : '已标记为待选择';
 }
 
 function aliasPairKey(a,b){
@@ -3780,57 +3910,6 @@ async function renderVisitStatsAdmin(){
   `).join('') || '<tr><td colspan="3" class="small">暂无最近访问数据</td></tr>';
 }
 
-function renderSiteSettingsAdmin(){
-  const ttlInput=document.getElementById('siteAccessTtlDaysAdmin');
-  const passwordInput=document.getElementById('siteAccessPasswordAdmin');
-  const status=document.getElementById('siteSettingsStatus');
-  if(!ttlInput || !status) return;
-  ttlInput.value=siteSettings.access_ttl_days;
-  if(passwordInput) passwordInput.value='';
-  const source=siteSettings.available?'云端设置':'默认设置';
-  status.textContent=`当前使用${source}；用户输入正确后 ${siteSettings.access_ttl_days} 天内不需要再次输入。`;
-}
-
-async function saveSiteSettings(){
-  const passwordInput=document.getElementById('siteAccessPasswordAdmin');
-  const ttlInput=document.getElementById('siteAccessTtlDaysAdmin');
-  const status=document.getElementById('siteSettingsStatus');
-  if(!status) return;
-  const password=String(passwordInput?.value||'').trim();
-  const ttlDays=Math.round(Number(ttlInput?.value||siteSettings.access_ttl_days));
-  if(!Number.isFinite(ttlDays) || ttlDays<1 || ttlDays>365){
-    status.textContent='免输入天数请填写 1 到 365 之间的整数';
-    return;
-  }
-  const rows=[
-    {setting_key:'access_ttl_days',setting_value:String(ttlDays),updated_at:new Date().toISOString()}
-  ];
-  if(password){
-    if(password.length<4){
-      status.textContent='访问密码至少需要 4 位';
-      return;
-    }
-    rows.push({setting_key:'access_password_hash',setting_value:await sha256Hex(password),updated_at:new Date().toISOString()});
-  }
-  status.textContent='正在保存访问设置...';
-  const res=await sb.from('site_settings').upsert(rows,{onConflict:'setting_key'});
-  if(res.error){
-    status.textContent='保存失败：'+res.error.message+'。如果提示找不到 site_settings，请先执行 database/site_settings.sql。';
-    return;
-  }
-  await loadSiteSettings();
-  if(password){
-    const ttlMs=siteSettings.access_ttl_days*24*60*60*1000;
-    localStorage.setItem(SITE_ACCESS_STORAGE_KEY,JSON.stringify({
-      password_hash:siteSettings.access_password_hash,
-      expires_at:Date.now()+ttlMs
-    }));
-  }
-  await logOperation('update_site_access_settings', password?'修改访问密码和免输入天数':'修改免输入天数', {ttl_days:ttlDays,password_changed:!!password});
-  renderSiteSettingsAdmin();
-  status.textContent=`保存成功。当前免输入时长为 ${siteSettings.access_ttl_days} 天。`;
-}
-
 async function renderQuestionAdmin(){
   // 管理后台按状态筛选匿名提问，并在同一行内完成回复。
   const body=document.getElementById('questionAdminBody');
@@ -4020,12 +4099,12 @@ document.getElementById('addSpecialRankBtn').onclick=async()=>{
 
 
 
-const rewardProgressName=document.getElementById('rewardProgressName');
-if(rewardProgressName) rewardProgressName.onchange=renderRewardProgressAdmin;
-const rewardProgressProvider=document.getElementById('rewardProgressProvider');
-if(rewardProgressProvider) rewardProgressProvider.onchange=()=>updateRewardProgressStatusOptions(rewardProgressProvider.value);
-const saveRewardProgressBtn=document.getElementById('saveRewardProgressBtn');
-if(saveRewardProgressBtn) saveRewardProgressBtn.onclick=saveRewardProgress;
+['rewardProgressSearch','rewardProgressProviderFilter','rewardProgressStateFilter'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(!el) return;
+  const eventName=el.tagName==='INPUT' ? 'input' : 'change';
+  el.addEventListener(eventName, renderRewardProgressAdmin);
+});
 const reloadRewardProgressBtn=document.getElementById('reloadRewardProgressBtn');
 if(reloadRewardProgressBtn) reloadRewardProgressBtn.onclick=async()=>{await loadAll(); renderRewardProgressAdmin();};
 const choiceOptionReward=document.getElementById('choiceOptionReward');
@@ -4107,9 +4186,9 @@ if(copyUnfulfilledBtn) copyUnfulfilledBtn.onclick=async()=>{
   const text=rewardRowsToText(rows);
   try{
     await navigator.clipboard.writeText(text);
-    alert(`已复制 ${rows.length} 条当前未兑现清单`);
+    setRewardLedgerActionStatus(`已复制 ${rows.length} 条当前未兑现清单`);
   }catch(e){
-    alert('复制失败，请改用导出CSV');
+    setRewardLedgerActionStatus('复制失败，请改用导出CSV');
   }
 };
 
@@ -4118,6 +4197,7 @@ if(downloadUnfulfilledBtn) downloadUnfulfilledBtn.onclick=()=>{
   const rows=currentRewardAdminRows.filter(r=>!r.fulfilled);
   const csv='\ufeff'+rewardRowsToCsv(rows);
   downloadText('当前筛选未兑现奖励.csv', csv, 'text/csv;charset=utf-8');
+  setRewardLedgerActionStatus(`已导出 ${rows.length} 条当前未兑现清单`);
 };
 
 const saveAnnouncementBtn=document.getElementById('saveAnnouncementBtn');
@@ -4180,10 +4260,6 @@ const reloadOperationLogsBtn=document.getElementById('reloadOperationLogsBtn');
 if(reloadOperationLogsBtn) reloadOperationLogsBtn.onclick=renderOperationLogs;
 const reloadVisitStatsBtn=document.getElementById('reloadVisitStatsBtn');
 if(reloadVisitStatsBtn) reloadVisitStatsBtn.onclick=renderVisitStatsAdmin;
-const saveSiteSettingsBtn=document.getElementById('saveSiteSettingsBtn');
-if(saveSiteSettingsBtn) saveSiteSettingsBtn.onclick=saveSiteSettings;
-const reloadSiteSettingsBtn=document.getElementById('reloadSiteSettingsBtn');
-if(reloadSiteSettingsBtn) reloadSiteSettingsBtn.onclick=async()=>{await loadSiteSettings(); renderSiteSettingsAdmin();};
 const reloadQuestionsBtn=document.getElementById('reloadQuestionsBtn');
 if(reloadQuestionsBtn) reloadQuestionsBtn.onclick=renderQuestionAdmin;
 document.querySelectorAll('.questionFilterBtn').forEach(btn=>{
@@ -4203,102 +4279,7 @@ document.getElementById('addAliasBtn').onclick=async()=>{
   if(!res.error){await logOperation('upsert_name_alias', `${alias_name} => ${canonical_name}`, {alias_name,canonical_name}); await loadAll(); await renderAliasAdmin();}
 };
 
-function unlockSiteAccess(){
-  document.body.classList.remove('accessLocked');
-  document.getElementById('accessGate')?.classList.add('hidden');
-}
-
-function parseAccessGrant(){
-  try{
-    const raw=localStorage.getItem(SITE_ACCESS_STORAGE_KEY);
-    if(!raw) return null;
-    const parsed=JSON.parse(raw);
-    if(typeof parsed!=='object' || !parsed) return null;
-    return parsed;
-  }catch(e){
-    localStorage.removeItem(SITE_ACCESS_STORAGE_KEY);
-    return null;
-  }
-}
-
-async function sha256Hex(value){
-  const data=new TextEncoder().encode(String(value));
-  const digest=await crypto.subtle.digest('SHA-256',data);
-  return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
-}
-
-async function loadSiteSettings(){
-  try{
-    const res=await sb.from('site_settings').select('setting_key,setting_value').in('setting_key',SITE_SETTINGS_KEYS);
-    if(res.error){
-      console.warn('site_settings unavailable:', res.error);
-      siteSettings={access_password_hash:DEFAULT_SITE_ACCESS_PASSWORD_HASH,access_ttl_days:DEFAULT_SITE_ACCESS_TTL_DAYS,available:false};
-      return siteSettings;
-    }
-    const next={access_password_hash:DEFAULT_SITE_ACCESS_PASSWORD_HASH,access_ttl_days:DEFAULT_SITE_ACCESS_TTL_DAYS,available:true};
-    const legacyPassword=(res.data||[]).find(row=>row.setting_key==='access_password')?.setting_value;
-    (res.data||[]).forEach(row=>{
-      if(row.setting_key==='access_password_hash' && String(row.setting_value||'').trim()){
-        next.access_password_hash=String(row.setting_value).trim();
-      }
-      if(row.setting_key==='access_ttl_days'){
-        const days=Number(row.setting_value);
-        if(Number.isFinite(days) && days>0) next.access_ttl_days=Math.min(365,Math.max(1,Math.round(days)));
-      }
-    });
-    if(next.access_password_hash===DEFAULT_SITE_ACCESS_PASSWORD_HASH && String(legacyPassword||'').trim()){
-      next.access_password_hash=await sha256Hex(String(legacyPassword).trim());
-    }
-    siteSettings=next;
-    return siteSettings;
-  }catch(e){
-    console.warn('site_settings load failed:', e);
-    siteSettings={access_password_hash:DEFAULT_SITE_ACCESS_PASSWORD_HASH,access_ttl_days:DEFAULT_SITE_ACCESS_TTL_DAYS,available:false};
-    return siteSettings;
-  }
-}
-
-function requireSiteAccess(){
-  if(IS_ADMIN_PAGE) return Promise.resolve();
-  const grant=parseAccessGrant();
-  if(grant?.password_hash===siteSettings.access_password_hash && Number(grant?.expires_at)>Date.now()){
-    unlockSiteAccess();
-    return Promise.resolve();
-  }
-  localStorage.removeItem(SITE_ACCESS_STORAGE_KEY);
-  const gate=document.getElementById('accessGate');
-  const form=document.getElementById('accessForm');
-  const input=document.getElementById('sitePasswordInput');
-  const status=document.getElementById('accessStatus');
-  gate?.classList.remove('hidden');
-  document.body.classList.add('accessLocked');
-  setTimeout(()=>input?.focus(),50);
-  return new Promise(resolve=>{
-    form.onsubmit=async e=>{
-      e.preventDefault();
-      const value=String(input.value||'').trim();
-      const valueHash=await sha256Hex(value);
-      if(valueHash!==siteSettings.access_password_hash){
-        status.textContent='密码不正确，请重新输入';
-        input.value='';
-        input.focus();
-        return;
-      }
-      const ttlMs=siteSettings.access_ttl_days*24*60*60*1000;
-      localStorage.setItem(SITE_ACCESS_STORAGE_KEY,JSON.stringify({
-        password_hash:siteSettings.access_password_hash,
-        expires_at:Date.now()+ttlMs
-      }));
-      status.textContent='';
-      unlockSiteAccess();
-      resolve();
-    };
-  });
-}
-
 (async function(){
-  await loadSiteSettings();
-  await requireSiteAccess();
   const {data:{user}}=await sb.auth.getUser();
   state.user=user;
   if(IS_ADMIN_PAGE) updateAuthUI();

@@ -14,16 +14,6 @@
 <link rel="stylesheet" href="styles/mobile.css" />
 </head>
 <body class="adminPage">
-<div class="accessGate" id="accessGate" aria-modal="true" role="dialog">
-  <form class="accessPanel" id="accessForm">
-    <div class="heroEyebrow">Zhou Tongyue Support Data Station</div>
-    <h2>访问验证</h2>
-    <div class="sub">请输入统一访问密码后继续查看数据站。</div>
-    <input id="sitePasswordInput" type="password" placeholder="输入访问密码" autocomplete="current-password" />
-    <button class="btn active" type="submit">进入数据站</button>
-    <div class="status" id="accessStatus"></div>
-  </form>
-</div>
 <header class="siteHero">
   <div class="siteVersion">v1.1 测试版</div>
   <div class="wrap heroInner">
@@ -162,39 +152,28 @@
       </div>
 
       <div class="adminSection rewardHubSection" id="rewardHubAdmin" data-admin-group="rewardCenter">
-        <h3>奖励中心</h3>
-        <div class="adminLead">奖励中心按流程拆成待处理、规则配置、选择与制作、兑现工作台。先看待处理，再进入对应页面处理具体事项。</div>
+        <div class="rewardOpsHeader">
+          <div>
+            <h3>奖励中心</h3>
+            <div class="adminLead">这里不再单独拆出工作台。顶部只显示待处理摘要，下面直接进入台账、制作、选择、兑现和规则配置。</div>
+          </div>
+          <div class="rewardActionStatus" id="rewardActionStatus">等待操作</div>
+        </div>
         <div class="rewardPanelNav" role="tablist" aria-label="奖励中心分类">
-          <button class="btn rewardPanelBtn active" data-reward-panel="tasks" type="button">待处理</button>
+          <button class="btn rewardPanelBtn active" data-reward-panel="ledger" type="button">用户奖励</button>
+          <button class="btn rewardPanelBtn" data-reward-panel="progress" type="button">制作进度</button>
+          <button class="btn rewardPanelBtn" data-reward-panel="choices" type="button">选择管理</button>
+          <button class="btn rewardPanelBtn" data-reward-panel="fulfillment" type="button">兑现处理</button>
           <button class="btn rewardPanelBtn" data-reward-panel="rules" type="button">规则配置</button>
-          <button class="btn rewardPanelBtn" data-reward-panel="workflow" type="button">选择与制作</button>
-          <button class="btn rewardPanelBtn" data-reward-panel="fulfillment" type="button">兑现工作台</button>
+        </div>
+        <div class="rewardOpsSummary" id="rewardOpsSummaryGrid">
+          <div class="small">打开奖励中心后将自动生成待处理摘要。</div>
         </div>
       </div>
 
-      <div class="adminSection rewardModule rewardPanelSection rewardPanelActive" id="rewardTaskAdmin" data-admin-group="rewardCenter" data-reward-panel="tasks">
-        <h3>奖励待处理</h3>
-        <div class="adminLead">这里只放奖励相关的待处理事项。点击卡片会切换到对应页面，并保留原有处理逻辑。</div>
-        <div class="adminTaskGrid rewardTaskGrid" id="rewardTaskGrid">
-          <div class="small">打开奖励中心后将自动生成待处理入口。</div>
-        </div>
-        <div class="adminSubhead">奖励台账同步检测</div>
-        <div class="ledgerSyncBox">
-          <div class="small">第二阶段用于把现有奖励数据同步到新台账表。同步只新增或更新奖励台账，不会删除旧奖励数据。</div>
-          <div class="adminTaskGrid rewardLedgerMetrics" id="rewardLedgerMetrics">
-            <div class="small">读取数据后将显示台账差异。</div>
-          </div>
-          <div class="row adminControlRow adminFilterBar">
-            <button class="btn" id="checkRewardLedgerBtn" type="button">重新检测</button>
-            <button class="btn good" id="syncRewardLedgerBtn" type="button">同步到奖励台账</button>
-          </div>
-          <div class="status" id="rewardLedgerStatus"></div>
-        </div>
-      </div>
-
-      <div class="adminSection rewardModule rewardPanelSection" id="rewardAdmin" data-admin-group="rewardCenter" data-reward-panel="fulfillment">
+      <div class="adminSection rewardModule rewardPanelSection" id="rewardFulfillmentAdmin" data-admin-group="rewardCenter" data-reward-panel="fulfillment">
         <h3>兑现工作台</h3>
-        <div class="adminLead">集中处理奖励兑现状态。搜索用户、场次或奖励后，可直接标记已兑现或未兑现，也可以批量更新。</div>
+        <div class="adminLead">日常发放时优先用这里。输入 ID 后，只看这个人的奖励，逐条标记已兑现或改回未兑现。</div>
         <div class="adminSubhead">按 ID 快速兑现</div>
         <div class="formGrid adminFilterBar">
           <input id="quickFulfillName" list="nameOptions" type="search" placeholder="输入 ID，查看该 ID 奖励状态">
@@ -205,7 +184,24 @@
         <div class="quickFulfillList" id="quickFulfillList">
           <div class="small">输入 ID 后，会显示该 ID 的奖励兑现状态，并优先排列未兑现奖励。</div>
         </div>
-        <div class="adminSubhead">完整奖励列表</div>
+      </div>
+
+      <div class="adminSection rewardModule rewardPanelSection rewardPanelActive" id="rewardAdmin" data-admin-group="rewardCenter" data-reward-panel="ledger">
+        <h3>用户奖励台账</h3>
+        <div class="adminLead">每一行代表一个用户获得的一项奖励资格。这里用于全量筛选、核对、复制未兑现清单、导出和批量处理。</div>
+        <details class="ledgerSyncBox rewardLedgerSyncDetails">
+          <summary>台账同步检测</summary>
+          <div class="small">用于把现有奖励数据同步到新台账表。同步只新增或更新奖励台账，不会删除旧奖励数据。</div>
+          <div class="adminTaskGrid rewardLedgerMetrics" id="rewardLedgerMetrics">
+            <div class="small">读取数据后将显示台账差异。</div>
+          </div>
+          <div class="row adminControlRow adminFilterBar">
+            <button class="btn" id="checkRewardLedgerBtn" type="button">重新检测</button>
+            <button class="btn good" id="syncRewardLedgerBtn" type="button">同步到奖励台账</button>
+          </div>
+          <div class="status" id="rewardLedgerStatus"></div>
+        </details>
+        <div class="adminSubhead">台账筛选</div>
         <div class="formGrid adminFilterBar rewardListFilters">
           <input id="rewardSearch" type="search" placeholder="搜索用户名 / 场次 / 奖励">
           <select id="rewardFulfillmentFilter">
@@ -252,39 +248,34 @@
           </select>
           <button class="btn good" id="applyRewardBatchBtn" type="button">批量更新</button>
         </div>
+        <div class="status" id="rewardBatchStatus"></div>
         <div class="small">未兑现会优先显示。批量操作会作用于当前筛选结果，可先筛选场次、奖励或状态后再批量更新。</div>
         <div class="list adminTableWrap"><table class="table"><thead><tr><th><input id="rewardSelectAll" type="checkbox" aria-label="选择全部奖励"></th><th>状态</th><th>用户 / 场次 / 奖励</th><th>操作</th></tr></thead><tbody id="rewardAdminBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection rewardModule rewardPanelSection" id="rewardProgressAdmin" data-admin-group="rewardCenter" data-reward-panel="workflow">
+      <div class="adminSection rewardModule rewardPanelSection" id="rewardProgressAdmin" data-admin-group="rewardCenter" data-reward-panel="progress">
         <h3>制作进度</h3>
-        <div class="small">自动列出已导入的奖励名称。这里维护的是奖励整体制作状态，前台用户查询奖励时会同步看到。</div>
-        <div class="formGrid">
-          <select id="rewardProgressName"></select>
-          <select id="rewardProgressProvider">
+        <div class="adminLead">这里维护的是“奖励本身”的制作状态。直接在对应条目后修改提供方、状态和说明，点本行保存即可。</div>
+        <div class="formGrid adminFilterBar rewardProgressFilters">
+          <input id="rewardProgressSearch" type="search" placeholder="搜索奖励名称 / 类型">
+          <select id="rewardProgressProviderFilter">
+            <option value="all">全部提供方</option>
             <option value="support_club">应援会提供</option>
             <option value="zhou_tongyue">周童玥提供</option>
           </select>
-          <select id="rewardProgressStatus">
-            <option>设计中</option>
-            <option>打样中</option>
-            <option>生产中</option>
-            <option>待抽取</option>
-            <option>已抽取</option>
-            <option>待领取</option>
-            <option>已完结</option>
+          <select id="rewardProgressStateFilter">
+            <option value="all">全部状态</option>
+            <option value="missing">暂未设置</option>
+            <option value="active">进行中</option>
+            <option value="done">已完成</option>
           </select>
-          <input id="rewardProgressNote" placeholder="进度说明，可空">
-        </div>
-        <div class="row adminActionRow">
-          <button class="btn good" id="saveRewardProgressBtn" type="button">保存进度</button>
           <button class="btn" id="reloadRewardProgressBtn" type="button">刷新进度</button>
         </div>
         <div class="status" id="rewardProgressStatusText"></div>
-        <div class="list adminTableWrap"><table class="table"><thead><tr><th>奖励</th><th>当前进度</th><th>说明</th></tr></thead><tbody id="rewardProgressBody"></tbody></table></div>
+        <div class="list adminTableWrap rewardProgressTable"><table class="table"><thead><tr><th>奖励</th><th>提供方</th><th>状态</th><th>说明</th><th>反馈</th><th>操作</th></tr></thead><tbody id="rewardProgressBody"></tbody></table></div>
       </div>
 
-      <div class="adminSection rewardModule rewardPanelSection" id="rewardChoiceAdmin" data-admin-group="rewardCenter" data-reward-panel="workflow">
+      <div class="adminSection rewardModule rewardPanelSection" id="rewardChoiceAdmin" data-admin-group="rewardCenter" data-reward-panel="choices">
         <h3>奖励选择</h3>
         <div class="adminLead">用于维护二选一或多选一奖励。先选择奖励并填写可选项，再在待选择名单中为每位用户保存具体选择。</div>
         <div class="formGrid">
@@ -591,20 +582,6 @@
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>模块</th><th>访问次数</th><th>独立访客</th></tr></thead><tbody id="visitStatsModuleBody"></tbody></table></div>
         <div class="adminSubhead">最近访问</div>
         <div class="list adminTableWrap"><table class="table"><thead><tr><th>时间</th><th>模块</th><th>设备 / 访客</th></tr></thead><tbody id="visitLogBody"></tbody></table></div>
-      </div>
-
-      <div class="adminSection systemModule" id="siteSettingsAdmin" data-admin-group="systemCenter">
-        <h3>系统设置</h3>
-        <div class="adminLead">这里维护数据站统一访问密码，以及用户输入正确后多久不需要再次输入。</div>
-        <div class="formGrid two">
-          <input id="siteAccessPasswordAdmin" type="password" placeholder="新访问密码，留空则不修改">
-          <input id="siteAccessTtlDaysAdmin" type="number" min="1" max="365" step="1" placeholder="免输入天数">
-        </div>
-        <div class="row adminActionRow">
-          <button class="btn good" id="saveSiteSettingsBtn" type="button">保存访问设置</button>
-          <button class="btn" id="reloadSiteSettingsBtn" type="button">刷新设置</button>
-        </div>
-        <div class="status" id="siteSettingsStatus"></div>
       </div>
 
       <div class="adminSection contentModule" id="questionAdmin" data-admin-group="contentCenter">
